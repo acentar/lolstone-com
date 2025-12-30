@@ -6,13 +6,13 @@ import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
 import { AuthProvider } from '../src/context/AuthContext';
-// import { WalletContextProvider } from '../src/context/WalletContext';
+import { WalletContextProvider } from '../src/context/WalletContext';
 import { colors } from '../src/constants/theme';
 
 export default function RootLayout() {
   return (
     <PaperProvider>
-      {/* <WalletContextProvider> */}
+      <WalletContextProvider>
         <AuthProvider>
           <View style={styles.container}>
             <StatusBar style="light" />
@@ -25,7 +25,7 @@ export default function RootLayout() {
             />
           </View>
         </AuthProvider>
-      {/* </WalletContextProvider> */}
+      </WalletContextProvider>
     </PaperProvider>
   );
 }
