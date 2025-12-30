@@ -1,7 +1,7 @@
 {
-  "buildCommand": "npx expo export --platform web",
+  "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
-  "devCommand": "npx expo start --web",
+  "devCommand": "npm run web",
   "installCommand": "npm install",
   "framework": null,
   "rewrites": [
@@ -13,6 +13,15 @@
   "headers": [
     {
       "source": "/_expo/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
       "headers": [
         {
           "key": "Cache-Control",
