@@ -6,13 +6,12 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -32,12 +31,12 @@ interface CardInHandProps {
   onDragEnd?: () => void;
 }
 
-const RARITY_COLORS: Record<CardRarity, string[]> = {
-  common: ['#4a4a4a', '#6b6b6b'],
-  uncommon: ['#22c55e', '#16a34a'],
-  rare: ['#3b82f6', '#1d4ed8'],
-  epic: ['#a855f7', '#7c3aed'],
-  legendary: ['#f59e0b', '#d97706'],
+const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = {
+  common: { border: ['#4a4a4a', '#6b6b6b'], accent: '#6b7280' },
+  uncommon: { border: ['#059669', '#10b981'], accent: '#10b981' },
+  rare: { border: ['#1d4ed8', '#3b82f6'], accent: '#3b82f6' },
+  epic: { border: ['#7c3aed', '#a855f7'], accent: '#a855f7' },
+  legendary: { border: ['#b45309', '#f59e0b', '#dc2626'], accent: '#f59e0b' },
 };
 
 export default function CardInHand({
@@ -55,20 +54,17 @@ export default function CardInHand({
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const zIndex = useSharedValue(index);
-  const isDragging = useSharedValue(false);
 
-  // Calculate fan position
   const fanAngle = totalCards > 1 ? (index - (totalCards - 1) / 2) * 5 : 0;
   const fanOffset = totalCards > 1 ? (index - (totalCards - 1) / 2) * 15 : 0;
 
   const design = card.design;
-  const colors = RARITY_COLORS[design.rarity];
+  const rarityConfig = RARITY_COLORS[design.rarity];
 
   const panGesture = Gesture.Pan()
     .onStart(() => {
-      isDragging.value = true;
       zIndex.value = 100;
-      scale.value = withSpring(1.1);
+      scale.value = withSpring(1.15);
       if (onDragStart) runOnJS(onDragStart)();
     })
     .onUpdate((event) => {
@@ -76,11 +72,7 @@ export default function CardInHand({
       translateY.value = event.translationY;
     })
     .onEnd((event) => {
-      isDragging.value = false;
-      
-      // Check if dragged to play zone (upward)
       if (canPlay && event.translationY < -100) {
-        // Calculate board position based on X
         const position = Math.floor((event.absoluteX / 350) * 7);
         if (onPlay) runOnJS(onPlay)(Math.max(0, Math.min(6, position)));
       }
@@ -109,65 +101,93 @@ export default function CardInHand({
     zIndex: zIndex.value,
   }));
 
-  const costColor = canPlay ? '#22c55e' : '#ef4444';
-
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View style={[styles.cardContainer, animatedStyle]}>
         {/* Card Border */}
         <LinearGradient
-          colors={colors as any}
+          colors={rarityConfig.border as any}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.cardBorder}
         >
           {/* Card Inner */}
           <View style={styles.cardInner}>
-            {/* Mana Cost */}
-            <View style={[styles.manaCost, { backgroundColor: costColor }]}>
-              <Text style={styles.manaText}>{design.mana_cost}</Text>
+            {/* Mana Crystal - Top Left */}
+            <View style={styles.manaCostContainer}>
+              <LinearGradient
+                colors={canPlay ? ['#1e40af', '#3b82f6'] : ['#991b1b', '#ef4444']}
+                style={styles.manaCrystal}
+              >
+                <Text style={styles.manaText}>{design.mana_cost}</Text>
+              </LinearGradient>
             </View>
 
-            {/* Card Art */}
+            {/* Card Art - 4:3 ratio */}
             <View style={styles.artFrame}>
               {design.image_url ? (
-                <Animated.Image
+                <Image
                   source={{ uri: design.image_url }}
                   style={styles.cardImage}
                   resizeMode="cover"
                 />
               ) : (
-                <Text style={styles.artPlaceholder}>
-                  {design.category === 'action' ? '⚡' : '⚔️'}
-                </Text>
+                <LinearGradient
+                  colors={['#1e293b', '#334155']}
+                  style={styles.artPlaceholderBg}
+                >
+                  <Text style={styles.artPlaceholder}>
+                    {design.category === 'action' ? '⚡' : '⚔️'}
+                  </Text>
+                </LinearGradient>
               )}
             </View>
 
             {/* Name */}
-            <Text style={styles.cardName} numberOfLines={1}>
-              {design.name}
-            </Text>
+            <View style={styles.nameContainer}>
+              <Text style={styles.cardName} numberOfLines={1}>
+                {design.name}
+              </Text>
+            </View>
 
-            {/* Stats (Units only) */}
+            {/* Stats - Bottom Right (Units only) */}
             {design.category === 'unit' && (
-              <View style={styles.statsRow}>
-                <View style={styles.attackBadge}>
-                  <Text style={styles.statText}>{design.base_attack}</Text>
+              <View style={styles.statsContainer}>
+                <View style={styles.statBadge}>
+                  <LinearGradient
+                    colors={['#dc2626', '#ef4444']}
+                    style={styles.statGradient}
+                  >
+                    <Text style={styles.statText}>{design.base_attack}</Text>
+                  </LinearGradient>
                 </View>
-                <View style={styles.healthBadge}>
-                  <Text style={styles.statText}>{design.base_health}</Text>
+                <View style={[styles.statDivider, { backgroundColor: rarityConfig.accent }]} />
+                <View style={styles.statBadge}>
+                  <LinearGradient
+                    colors={['#16a34a', '#22c55e']}
+                    style={styles.statGradient}
+                  >
+                    <Text style={styles.statText}>{design.base_health}</Text>
+                  </LinearGradient>
                 </View>
               </View>
             )}
 
-            {/* Keywords Icons */}
+            {/* Keywords Icons - Top Right */}
             {design.keywords.length > 0 && (
               <View style={styles.keywordsRow}>
-                {design.keywords.map((kw) => (
-                  <Text key={kw} style={styles.keywordIcon}>
-                    {KEYWORD_INFO[kw].icon}
-                  </Text>
+                {design.keywords.slice(0, 2).map((kw) => (
+                  <View key={kw} style={styles.keywordBadge}>
+                    <Text style={styles.keywordIcon}>
+                      {KEYWORD_INFO[kw].icon}
+                    </Text>
+                  </View>
                 ))}
               </View>
             )}
+
+            {/* Rarity indicator */}
+            <View style={[styles.rarityDot, { backgroundColor: rarityConfig.accent }]} />
 
             {/* Can't play overlay */}
             {!canPlay && (
@@ -182,9 +202,9 @@ export default function CardInHand({
 
 const styles = StyleSheet.create({
   cardContainer: {
-    width: 80,
-    height: 110,
-    marginHorizontal: -15, // Overlap cards
+    width: 75,
+    height: 105,
+    marginHorizontal: -12,
   },
   cardBorder: {
     flex: 1,
@@ -193,92 +213,131 @@ const styles = StyleSheet.create({
   },
   cardInner: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0f0f1a',
     borderRadius: 6,
     overflow: 'hidden',
     position: 'relative',
   },
-  manaCost: {
+  
+  // Mana Crystal
+  manaCostContainer: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    top: -2,
+    left: -2,
+    zIndex: 10,
+  },
+  manaCrystal: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
-    borderWidth: 1,
-    borderColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
   },
   manaText: {
     color: '#fff',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '900',
   },
+  
+  // Art Frame - 4:3 ratio
   artFrame: {
-    height: 50,
-    backgroundColor: '#1e293b',
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 45, // 4:3 ratio for ~60px width
+    marginHorizontal: 3,
+    marginTop: 3,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   cardImage: {
     width: '100%',
     height: '100%',
   },
+  artPlaceholderBg: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   artPlaceholder: {
-    fontSize: 24,
-    opacity: 0.6,
+    fontSize: 20,
+    opacity: 0.7,
+  },
+  
+  // Name
+  nameContainer: {
+    paddingHorizontal: 3,
+    paddingVertical: 2,
   },
   cardName: {
     color: '#f8fafc',
-    fontSize: 9,
-    fontWeight: '600',
+    fontSize: 8,
+    fontWeight: '700',
     textAlign: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
   },
-  statsRow: {
+  
+  // Stats Container - Bottom Right
+  statsContainer: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginTop: 'auto',
-    paddingBottom: 4,
+    alignItems: 'center',
+    gap: 2,
   },
-  attackBadge: {
+  statBadge: {
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  statGradient: {
     width: 18,
     height: 18,
-    borderRadius: 9,
-    backgroundColor: '#ef4444',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  healthBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#22c55e',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 4,
   },
   statText: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '900',
   },
+  statDivider: {
+    width: 1,
+    height: 12,
+    opacity: 0.5,
+  },
+  
+  // Keywords
   keywordsRow: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 2,
+    right: 2,
     flexDirection: 'column',
-    gap: 2,
+    gap: 1,
+  },
+  keywordBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 3,
+    padding: 1,
   },
   keywordIcon: {
-    fontSize: 10,
+    fontSize: 8,
   },
+  
+  // Rarity
+  rarityDot: {
+    position: 'absolute',
+    bottom: 3,
+    left: 3,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  
+  // Overlay
   cantPlayOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
 });
-

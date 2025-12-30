@@ -16,7 +16,6 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { UnitInPlay } from '../../game/types';
 import { CardRarity, KEYWORD_INFO } from '../../types/database';
@@ -31,12 +30,12 @@ interface UnitOnBoardProps {
   onAttackTarget?: () => void;
 }
 
-const RARITY_COLORS: Record<CardRarity, string[]> = {
-  common: ['#4a4a4a', '#5a5a5a'],
-  uncommon: ['#22c55e', '#16a34a'],
-  rare: ['#3b82f6', '#1d4ed8'],
-  epic: ['#a855f7', '#7c3aed'],
-  legendary: ['#f59e0b', '#d97706'],
+const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = {
+  common: { border: ['#4a4a4a', '#6b6b6b'], accent: '#6b7280' },
+  uncommon: { border: ['#059669', '#10b981'], accent: '#10b981' },
+  rare: { border: ['#1d4ed8', '#3b82f6'], accent: '#3b82f6' },
+  epic: { border: ['#7c3aed', '#a855f7'], accent: '#a855f7' },
+  legendary: { border: ['#b45309', '#f59e0b', '#dc2626'], accent: '#f59e0b' },
 };
 
 export default function UnitOnBoard({
@@ -53,7 +52,7 @@ export default function UnitOnBoard({
   const shake = useSharedValue(0);
 
   const design = unit.design;
-  const colors = RARITY_COLORS[design.rarity];
+  const rarityConfig = RARITY_COLORS[design.rarity];
 
   // Attack animation
   useEffect(() => {
@@ -64,16 +63,6 @@ export default function UnitOnBoard({
       );
     }
   }, [isAttacking]);
-
-  // Damaged animation
-  const triggerDamageAnimation = () => {
-    shake.value = withSequence(
-      withTiming(-5, { duration: 50 }),
-      withTiming(5, { duration: 50 }),
-      withTiming(-5, { duration: 50 }),
-      withTiming(0, { duration: 50 })
-    );
-  };
 
   const handlePress = () => {
     if (isValidTarget && onAttackTarget) {
@@ -91,20 +80,17 @@ export default function UnitOnBoard({
     ],
   }));
 
-  // Health color
+  // Health color based on damage
   const healthPercent = unit.currentHealth / unit.maxHealth;
-  const healthColor = healthPercent > 0.5 ? '#22c55e' : healthPercent > 0.25 ? '#f59e0b' : '#ef4444';
-
-  // Stat changes
-  const attackChanged = unit.currentAttack !== unit.design.base_attack;
-  const healthChanged = unit.currentHealth !== unit.design.base_health || unit.maxHealth !== unit.design.base_health;
+  const isBuffed = unit.currentAttack > unit.design.base_attack || unit.maxHealth > unit.design.base_health;
+  const isDamaged = unit.currentHealth < unit.maxHealth;
 
   return (
     <Pressable onPress={handlePress}>
       <Animated.View style={[styles.container, animatedStyle]}>
-        {/* Can Attack Indicator */}
+        {/* Can Attack Glow */}
         {isOwned && canAttack && (
-          <View style={styles.canAttackGlow} />
+          <View style={[styles.canAttackGlow, { borderColor: '#22c55e' }]} />
         )}
 
         {/* Valid Target Indicator */}
@@ -112,20 +98,15 @@ export default function UnitOnBoard({
           <View style={styles.targetIndicator} />
         )}
 
-        {/* Summoning Sickness */}
-        {unit.hasSummoningSickness && (
-          <View style={styles.sicknessOverlay}>
-            <Text style={styles.sicknessText}>💤</Text>
-          </View>
-        )}
-
         {/* Card Border */}
         <LinearGradient
-          colors={colors as any}
+          colors={rarityConfig.border as any}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.cardBorder}
         >
           <View style={styles.cardInner}>
-            {/* Art */}
+            {/* Art - 4:3 ratio */}
             <View style={styles.artFrame}>
               {design.image_url ? (
                 <Image
@@ -134,9 +115,14 @@ export default function UnitOnBoard({
                   resizeMode="cover"
                 />
               ) : (
-                <Text style={styles.artPlaceholder}>
-                  {design.card_type === 'meme_minion' ? '😂' : '⚔️'}
-                </Text>
+                <LinearGradient
+                  colors={['#1e293b', '#334155']}
+                  style={styles.artPlaceholderBg}
+                >
+                  <Text style={styles.artPlaceholder}>
+                    {design.card_type === 'meme_minion' ? '😂' : '⚔️'}
+                  </Text>
+                </LinearGradient>
               )}
             </View>
 
@@ -144,9 +130,9 @@ export default function UnitOnBoard({
             {!unit.isSilenced && design.keywords.length > 0 && (
               <View style={styles.keywordsBar}>
                 {design.keywords.map((kw) => (
-                  <Text key={kw} style={styles.keywordIcon} title={KEYWORD_INFO[kw].name}>
-                    {KEYWORD_INFO[kw].icon}
-                  </Text>
+                  <View key={kw} style={styles.keywordBadge}>
+                    <Text style={styles.keywordIcon}>{KEYWORD_INFO[kw].icon}</Text>
+                  </View>
                 ))}
               </View>
             )}
@@ -158,29 +144,52 @@ export default function UnitOnBoard({
               </View>
             )}
 
-            {/* Stats */}
-            <View style={styles.statsRow}>
+            {/* Summoning Sickness */}
+            {unit.hasSummoningSickness && (
+              <View style={styles.sicknessOverlay}>
+                <Text style={styles.sicknessText}>💤</Text>
+              </View>
+            )}
+
+            {/* Stats - Bottom Right */}
+            <View style={styles.statsContainer}>
               {/* Attack */}
-              <View style={[
-                styles.attackBadge,
-                attackChanged && styles.statBuffed,
-              ]}>
-                <Text style={styles.statText}>{unit.currentAttack}</Text>
+              <View style={styles.statWrapper}>
+                <LinearGradient
+                  colors={['#dc2626', '#ef4444']}
+                  style={[
+                    styles.statBadge,
+                    isBuffed && unit.currentAttack > unit.design.base_attack && styles.statBuffed,
+                  ]}
+                >
+                  <Text style={styles.statValue}>{unit.currentAttack}</Text>
+                </LinearGradient>
               </View>
 
+              <View style={[styles.statDivider, { backgroundColor: rarityConfig.accent }]} />
+
               {/* Health */}
-              <View style={[
-                styles.healthBadge,
-                { backgroundColor: healthColor },
-                healthChanged && (unit.currentHealth < unit.design.base_health ? styles.statDamaged : styles.statBuffed),
-              ]}>
-                <Text style={styles.statText}>{unit.currentHealth}</Text>
+              <View style={styles.statWrapper}>
+                <LinearGradient
+                  colors={isDamaged ? ['#b45309', '#f59e0b'] : ['#16a34a', '#22c55e']}
+                  style={[
+                    styles.statBadge,
+                    isBuffed && unit.maxHealth > unit.design.base_health && styles.statBuffed,
+                  ]}
+                >
+                  <Text style={styles.statValue}>{unit.currentHealth}</Text>
+                </LinearGradient>
               </View>
+            </View>
+
+            {/* Rarity gem */}
+            <View style={[styles.rarityGem, { backgroundColor: rarityConfig.accent }]}>
+              <Text style={styles.rarityLetter}>{design.rarity.charAt(0).toUpperCase()}</Text>
             </View>
           </View>
         </LinearGradient>
 
-        {/* Name Tooltip (on hover/select) */}
+        {/* Name Tag */}
         <View style={styles.nameTag}>
           <Text style={styles.nameText} numberOfLines={1}>
             {design.name}
@@ -194,39 +203,29 @@ export default function UnitOnBoard({
 const styles = StyleSheet.create({
   container: {
     width: 70,
-    height: 90,
+    height: 95,
     position: 'relative',
   },
   canAttackGlow: {
     position: 'absolute',
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#22c55e',
     backgroundColor: 'rgba(34, 197, 94, 0.1)',
   },
   targetIndicator: {
     position: 'absolute',
-    top: -6,
-    left: -6,
-    right: -6,
-    bottom: -6,
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
     borderRadius: 12,
     borderWidth: 3,
     borderColor: '#ef4444',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  sicknessOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    zIndex: 20,
-  },
-  sicknessText: {
-    fontSize: 14,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
   },
   cardBorder: {
     flex: 1,
@@ -235,24 +234,34 @@ const styles = StyleSheet.create({
   },
   cardInner: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0f0f1a',
     borderRadius: 6,
     overflow: 'hidden',
+    position: 'relative',
   },
+  
+  // Art Frame - 4:3 ratio
   artFrame: {
     flex: 1,
-    backgroundColor: '#1e293b',
-    alignItems: 'center',
-    justifyContent: 'center',
+    margin: 3,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   cardImage: {
     width: '100%',
     height: '100%',
   },
-  artPlaceholder: {
-    fontSize: 28,
-    opacity: 0.7,
+  artPlaceholderBg: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  artPlaceholder: {
+    fontSize: 24,
+    opacity: 0.8,
+  },
+  
+  // Keywords
   keywordsBar: {
     position: 'absolute',
     top: 2,
@@ -260,12 +269,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 2,
   },
-  keywordIcon: {
-    fontSize: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 4,
-    paddingHorizontal: 2,
+  keywordBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 3,
+    padding: 2,
   },
+  keywordIcon: {
+    fontSize: 9,
+  },
+  
+  // Silenced
   silencedBadge: {
     position: 'absolute',
     top: '50%',
@@ -275,68 +288,92 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   silencedText: {
     fontSize: 14,
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  
+  // Summoning Sickness
+  sicknessOverlay: {
     position: 'absolute',
-    bottom: 2,
-    left: 2,
+    top: 2,
     right: 2,
   },
-  attackBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#ef4444',
+  sicknessText: {
+    fontSize: 12,
+  },
+  
+  // Stats Container - Bottom Right
+  statsContainer: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  statWrapper: {},
+  statBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#0f172a',
-  },
-  healthBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#0f172a',
-  },
-  statText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '800',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   statBuffed: {
     borderColor: '#22c55e',
     borderWidth: 2,
   },
-  statDamaged: {
-    borderColor: '#ef4444',
-    borderWidth: 2,
+  statValue: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
   },
+  statDivider: {
+    width: 1,
+    height: 14,
+    opacity: 0.5,
+  },
+  
+  // Rarity Gem - Bottom Left
+  rarityGem: {
+    position: 'absolute',
+    bottom: 3,
+    left: 3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  rarityLetter: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  
+  // Name Tag
   nameTag: {
     position: 'absolute',
-    bottom: -16,
-    left: -10,
-    right: -10,
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    bottom: -14,
+    left: -8,
+    right: -8,
+    backgroundColor: 'rgba(15, 15, 26, 0.95)',
     paddingVertical: 2,
     paddingHorizontal: 4,
     borderRadius: 4,
   },
   nameText: {
     color: '#e2e8f0',
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: '600',
     textAlign: 'center',
   },
 });
-
