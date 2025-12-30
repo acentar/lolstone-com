@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView, useWindowDimensions, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, useWindowDimensions, Pressable, Image, Alert, Platform } from 'react-native';
 import { 
   Text, Button, TextInput, Chip, Divider, IconButton, Card,
-  SegmentedButtons, Switch,
+  SegmentedButtons, Switch, ActivityIndicator,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../../src/lib/supabase';
 import { useAuthContext } from '../../../src/context/AuthContext';
 import { 
@@ -57,6 +58,8 @@ interface CardFormData {
   maxSupply: number | null;
   keywords: CardKeyword[];
   effects: EffectForm[];
+  imageUri: string | null;
+  imageUrl: string | null;
 }
 
 const initialFormData: CardFormData = {
@@ -71,6 +74,8 @@ const initialFormData: CardFormData = {
   maxSupply: null,
   keywords: [],
   effects: [],
+  imageUri: null,
+  imageUrl: null,
 };
 
 export default function CardDesignerPage() {
@@ -81,6 +86,7 @@ export default function CardDesignerPage() {
 
   const [formData, setFormData] = useState<CardFormData>(initialFormData);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [showEffectBuilder, setShowEffectBuilder] = useState(false);
   const [currentEffect, setCurrentEffect] = useState<EffectForm>({
     trigger: 'on_play',
@@ -88,6 +94,77 @@ export default function CardDesignerPage() {
     action: 'damage',
     value: 1,
   });
+
+  // Image picker with recommended 4:3 aspect ratio for card art
+  const pickImage = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera roll permissions to upload images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3], // 4:3 aspect ratio for card art
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setFormData(prev => ({ ...prev, imageUri: asset.uri }));
+        await uploadImage(asset.uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const uploadImage = async (uri: string) => {
+    setUploadingImage(true);
+    try {
+      // Generate unique filename
+      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `card_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+
+      // Fetch the image and convert to blob
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('card-images')
+        .upload(fileName, blob, {
+          contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Upload error:', error);
+        Alert.alert('Upload failed', error.message);
+        return;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('card-images')
+        .getPublicUrl(data.path);
+
+      setFormData(prev => ({ ...prev, imageUrl: publicUrl }));
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = () => {
+    setFormData(prev => ({ ...prev, imageUri: null, imageUrl: null }));
+  };
 
   const generateAbilityText = (): string => {
     const parts: string[] = [];
@@ -180,6 +257,7 @@ export default function CardDesignerPage() {
           card_type: formData.cardType,
           category: formData.category,
           max_supply: formData.maxSupply,
+          image_url: formData.imageUrl,
           created_by: gameMaster?.id,
         })
         .select()
@@ -307,6 +385,50 @@ export default function CardDesignerPage() {
                 </View>
               </View>
             </>
+          )}
+        </View>
+
+        <Divider style={styles.divider} />
+
+        {/* Card Artwork */}
+        <Text style={styles.sectionTitle}>Card Artwork (4:3 ratio)</Text>
+        <View style={styles.imageUploadSection}>
+          {formData.imageUri ? (
+            <View style={styles.imagePreviewContainer}>
+              <Image 
+                source={{ uri: formData.imageUri }} 
+                style={styles.uploadedImage}
+                resizeMode="cover"
+              />
+              {uploadingImage && (
+                <View style={styles.uploadingOverlay}>
+                  <ActivityIndicator color="#fff" size="large" />
+                  <Text style={styles.uploadingText}>Uploading...</Text>
+                </View>
+              )}
+              <View style={styles.imageActions}>
+                <Pressable style={styles.changeImageBtn} onPress={pickImage}>
+                  <Text style={styles.changeImageText}>Change</Text>
+                </Pressable>
+                <Pressable style={styles.removeImageBtn} onPress={removeImage}>
+                  <Text style={styles.removeImageText}>Remove</Text>
+                </Pressable>
+              </View>
+              {formData.imageUrl && (
+                <View style={styles.uploadedBadge}>
+                  <Text style={styles.uploadedBadgeText}>✓ Uploaded</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <Pressable style={styles.imageUploadButton} onPress={pickImage}>
+              <View style={styles.uploadIconContainer}>
+                <Text style={styles.uploadIcon}>📷</Text>
+              </View>
+              <Text style={styles.uploadTitle}>Upload Card Art</Text>
+              <Text style={styles.uploadHint}>Recommended: 400×300 or any 4:3 ratio</Text>
+              <Text style={styles.uploadHint}>Max size: 5MB</Text>
+            </Pressable>
           )}
         </View>
 
@@ -536,6 +658,7 @@ export default function CardDesignerPage() {
           flavorText={formData.flavorText}
           keywords={formData.keywords}
           cardType={formData.cardType}
+          imageUrl={formData.imageUrl || formData.imageUri || undefined}
           scale={isWideScreen ? 1.1 : 0.9}
         />
       </View>
@@ -576,6 +699,7 @@ export default function CardDesignerPage() {
           abilityText={generateAbilityText()}
           keywords={formData.keywords}
           cardType={formData.cardType}
+          imageUrl={formData.imageUrl || formData.imageUri || undefined}
           scale={0.4}
         />
         <Button mode="contained" onPress={handleSave} loading={saving} disabled={!formData.name}>
@@ -671,6 +795,110 @@ const styles = StyleSheet.create({
   divider: {
     marginVertical: adminSpacing.lg,
   },
+
+  // Image Upload Section
+  imageUploadSection: {
+    marginTop: adminSpacing.sm,
+  },
+  imageUploadButton: {
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    borderWidth: 2,
+    borderColor: adminColors.border,
+    borderStyle: 'dashed',
+    padding: adminSpacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: adminColors.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: adminSpacing.md,
+  },
+  uploadIcon: {
+    fontSize: 28,
+  },
+  uploadTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.xs,
+  },
+  uploadHint: {
+    fontSize: 12,
+    color: adminColors.textMuted,
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+    borderRadius: adminRadius.lg,
+    overflow: 'hidden',
+    backgroundColor: adminColors.surface,
+    borderWidth: 1,
+    borderColor: adminColors.border,
+  },
+  uploadedImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: adminRadius.lg,
+  },
+  uploadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadingText: {
+    color: '#fff',
+    marginTop: adminSpacing.sm,
+    fontWeight: '600',
+  },
+  imageActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: adminSpacing.md,
+    paddingVertical: adminSpacing.md,
+  },
+  changeImageBtn: {
+    paddingHorizontal: adminSpacing.lg,
+    paddingVertical: adminSpacing.sm,
+    backgroundColor: adminColors.accent,
+    borderRadius: adminRadius.md,
+  },
+  changeImageText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  removeImageBtn: {
+    paddingHorizontal: adminSpacing.lg,
+    paddingVertical: adminSpacing.sm,
+    backgroundColor: '#ef4444',
+    borderRadius: adminRadius.md,
+  },
+  removeImageText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  uploadedBadge: {
+    position: 'absolute',
+    top: adminSpacing.sm,
+    right: adminSpacing.sm,
+    backgroundColor: 'rgba(34, 197, 94, 0.9)',
+    paddingHorizontal: adminSpacing.sm,
+    paddingVertical: 4,
+    borderRadius: adminRadius.sm,
+  },
+  uploadedBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
   rarityRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

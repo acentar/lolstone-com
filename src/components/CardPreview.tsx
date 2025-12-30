@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import Animated, {
   useSharedValue,
@@ -201,26 +201,47 @@ export default function CardPreview({
 
           {/* Art Frame */}
           <View style={[styles.artFrame, { height: 100 * scale }]}>
-            <LinearGradient
-              colors={['#0f172a', '#1e293b', '#0f172a']}
-              style={styles.artBackground}
-            >
-              <Text style={[styles.artPlaceholder, { fontSize: 48 * scale }]}>
-                {TYPE_ICONS[cardType] || '🃏'}
-              </Text>
-              
-              {/* Shimmer Overlay */}
-              {config.animationSpeed > 0 && (
-                <Animated.View style={[styles.shimmerOverlay, animatedShimmerStyle]}>
-                  <LinearGradient
-                    colors={['transparent', 'rgba(255,255,255,0.1)', 'transparent']}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                </Animated.View>
-              )}
-            </LinearGradient>
+            {imageUrl ? (
+              <View style={styles.artBackground}>
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                />
+                {/* Shimmer Overlay */}
+                {config.animationSpeed > 0 && (
+                  <Animated.View style={[styles.shimmerOverlay, animatedShimmerStyle]}>
+                    <LinearGradient
+                      colors={['transparent', 'rgba(255,255,255,0.15)', 'transparent']}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  </Animated.View>
+                )}
+              </View>
+            ) : (
+              <LinearGradient
+                colors={['#0f172a', '#1e293b', '#0f172a']}
+                style={styles.artBackground}
+              >
+                <Text style={[styles.artPlaceholder, { fontSize: 48 * scale }]}>
+                  {TYPE_ICONS[cardType] || '🃏'}
+                </Text>
+                
+                {/* Shimmer Overlay */}
+                {config.animationSpeed > 0 && (
+                  <Animated.View style={[styles.shimmerOverlay, animatedShimmerStyle]}>
+                    <LinearGradient
+                      colors={['transparent', 'rgba(255,255,255,0.1)', 'transparent']}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  </Animated.View>
+                )}
+              </LinearGradient>
+            )}
           </View>
 
           {/* Type Bar */}
@@ -407,6 +428,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
   },
   artPlaceholder: {
     opacity: 0.9,

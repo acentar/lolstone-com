@@ -32,7 +32,14 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to upload card artwork.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to take photos for card artwork."
+        }
+      ]
     ]
   }
 }
