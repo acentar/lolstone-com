@@ -1,5 +1,5 @@
-// Import polyfills first
-import '../src/polyfills';
+// Polyfills temporarily disabled for debugging
+// import '../src/polyfills';
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
