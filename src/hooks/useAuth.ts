@@ -56,22 +56,21 @@ export function useAuth() {
 
   async function checkUserRole(user: User, session: Session) {
     setState(prev => ({ ...prev, loading: true }));
+    console.log('checkUserRole started for:', user.id);
 
     try {
-      // Use RPC function to check GM status (bypasses RLS circular dependency)
-      const { data: isGM, error: rpcError } = await supabase
-        .rpc('is_game_master', { user_uuid: user.id });
+      // First, try direct GM table check (simpler, no RPC dependency)
+      console.log('Checking GM table directly...');
+      const { data: gmData, error: gmError } = await supabase
+        .from('game_masters')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      console.log('GM check result:', { isGM, rpcError });
+      console.log('Direct GM check result:', { gmData, gmError });
 
-      if (isGM) {
-        // Now fetch GM data (should work since we're a GM)
-        const { data: gmData } = await supabase
-          .from('game_masters')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
+      if (gmData && !gmError) {
+        console.log('User is a Game Master!');
         setState({
           session,
           user,
@@ -83,12 +82,45 @@ export function useAuth() {
         return;
       }
 
+      // Fallback: Try RPC function
+      console.log('Trying RPC function...');
+      try {
+        const { data: isGM, error: rpcError } = await supabase
+          .rpc('is_game_master', { user_uuid: user.id });
+
+        console.log('RPC GM check result:', { isGM, rpcError });
+
+        if (isGM && !rpcError) {
+          // Fetch GM data
+          const { data: gmDataRpc } = await supabase
+            .from('game_masters')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
+
+          setState({
+            session,
+            user,
+            isGameMaster: true,
+            gameMaster: gmDataRpc,
+            player: null,
+            loading: false,
+          });
+          return;
+        }
+      } catch (rpcError) {
+        console.log('RPC function not available, skipping:', rpcError);
+      }
+
       // Check if user is a Player
-      const { data: playerData } = await supabase
+      console.log('Checking if user is a player...');
+      const { data: playerData, error: playerError } = await supabase
         .from('players')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
+
+      console.log('Player check result:', { playerData, playerError });
 
       setState({
         session,

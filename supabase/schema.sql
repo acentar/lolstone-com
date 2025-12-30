@@ -201,6 +201,10 @@ ALTER TABLE decks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deck_cards ENABLE ROW LEVEL SECURITY;
 
 -- GAME MASTERS: Only GMs can see/modify GM data
+-- Allow users to check their own GM status (prevents circular dependency)
+CREATE POLICY "Users can check own GM status" ON game_masters
+    FOR SELECT USING (auth.uid() = user_id);
+
 CREATE POLICY "GMs can view all GMs" ON game_masters
     FOR SELECT USING (is_game_master(auth.uid()));
 
