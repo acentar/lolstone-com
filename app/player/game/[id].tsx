@@ -105,8 +105,8 @@ export default function GamePlayScreen() {
 
       // Get player data (name and avatar)
       const [player1Data, player2Data] = await Promise.all([
-        supabase.from('players').select('name, avatar_url').eq('id', room.player1_id).single(),
-        supabase.from('players').select('name, avatar_url').eq('id', room.player2_id).single(),
+        (supabase.from('players') as any).select('name, avatar_url').eq('id', room.player1_id).single(),
+        (supabase.from('players') as any).select('name, avatar_url').eq('id', room.player2_id).single(),
       ]);
 
       if (player1Data.error) {
@@ -163,8 +163,8 @@ export default function GamePlayScreen() {
 
   const loadDeckCards = async (deckId: string): Promise<CardInHand[]> => {
     try {
-      const { data, error } = await supabase
-        .from('deck_cards')
+      const { data, error } = await (supabase
+        .from('deck_cards') as any)
         .select(`
           card_instance_id,
           card_instances (
