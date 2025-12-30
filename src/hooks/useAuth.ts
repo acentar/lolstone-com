@@ -59,18 +59,39 @@ export function useAuth() {
     console.log('checkUserRole started for:', user.id);
 
     try {
-      // First, try direct GM table check (simpler, no RPC dependency)
-      console.log('Checking GM table directly...');
-      const { data: gmData, error: gmError } = await supabase
-        .from('game_masters')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Use RPC function first (bypasses RLS with SECURITY DEFINER)
+      console.log('Checking GM status via RPC...');
+      
+      let isGM = false;
+      let gmData = null;
+      
+      try {
+        const rpcResult = await Promise.race([
+          supabase.rpc('is_game_master', { user_uuid: user.id }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('RPC timeout')), 3000))
+        ]) as any;
+        
+        console.log('RPC result:', rpcResult);
+        isGM = rpcResult?.data === true;
+      } catch (rpcErr) {
+        console.log('RPC failed or timed out:', rpcErr);
+      }
 
-      console.log('Direct GM check result:', { gmData, gmError });
+      if (isGM) {
+        console.log('User is GM! Fetching GM data...');
+        try {
+          const gmResult = await Promise.race([
+            supabase.from('game_masters').select('*').eq('user_id', user.id).single(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('GM fetch timeout')), 3000))
+          ]) as any;
+          gmData = gmResult?.data;
+          console.log('GM data fetched:', gmData);
+        } catch (gmErr) {
+          console.log('GM data fetch failed:', gmErr);
+          // Still mark as GM even if we can't fetch the data
+          gmData = { id: 'unknown', user_id: user.id, name: 'Game Master', email: user.email };
+        }
 
-      if (gmData && !gmError) {
-        console.log('User is a Game Master!');
         setState({
           session,
           user,
@@ -82,45 +103,19 @@ export function useAuth() {
         return;
       }
 
-      // Fallback: Try RPC function
-      console.log('Trying RPC function...');
-      try {
-        const { data: isGM, error: rpcError } = await supabase
-          .rpc('is_game_master', { user_uuid: user.id });
-
-        console.log('RPC GM check result:', { isGM, rpcError });
-
-        if (isGM && !rpcError) {
-          // Fetch GM data
-          const { data: gmDataRpc } = await supabase
-            .from('game_masters')
-            .select('*')
-            .eq('user_id', user.id)
-            .single();
-
-          setState({
-            session,
-            user,
-            isGameMaster: true,
-            gameMaster: gmDataRpc,
-            player: null,
-            loading: false,
-          });
-          return;
-        }
-      } catch (rpcError) {
-        console.log('RPC function not available, skipping:', rpcError);
-      }
-
       // Check if user is a Player
       console.log('Checking if user is a player...');
-      const { data: playerData, error: playerError } = await supabase
-        .from('players')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      console.log('Player check result:', { playerData, playerError });
+      let playerData = null;
+      try {
+        const playerResult = await Promise.race([
+          supabase.from('players').select('*').eq('user_id', user.id).maybeSingle(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Player fetch timeout')), 3000))
+        ]) as any;
+        playerData = playerResult?.data;
+        console.log('Player check result:', playerData);
+      } catch (playerErr) {
+        console.log('Player check failed:', playerErr);
+      }
 
       setState({
         session,
