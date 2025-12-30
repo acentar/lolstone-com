@@ -61,6 +61,23 @@ export default function CryptoPayment({
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
+  // Check for Phantom availability
+  const [phantomAvailable, setPhantomAvailable] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const checkPhantom = () => {
+        const { solana } = window as any;
+        const available = solana?.isPhantom;
+        setPhantomAvailable(!!available);
+        console.log('Phantom available:', available);
+      };
+
+      checkPhantom();
+      // Check again after a delay in case extension loads later
+      setTimeout(checkPhantom, 1000);
+    }
+  }, []);
+
   // Animation for glowing effect
   const glowOpacity = useSharedValue(0.5);
 
@@ -114,10 +131,41 @@ export default function CryptoPayment({
 
   const handleConnect = async () => {
     setPaymentState('connecting');
+    setError(null);
+
     try {
       console.log('Attempting to connect wallet...');
+
+      // If Phantom is available, try direct connection first
+      if (Platform.OS === 'web' && phantomAvailable && typeof window !== 'undefined') {
+        try {
+          console.log('Trying direct Phantom connection...');
+          const { solana } = window as any;
+
+          if (solana?.isPhantom) {
+            const response = await solana.connect();
+            console.log('Direct Phantom connection successful:', response.publicKey.toString());
+
+            // Wait a moment for the wallet context to update
+            setTimeout(() => {
+              if (connected) {
+                setPaymentState('confirming');
+              } else {
+                setError('Connection successful but not detected. Please refresh and try again.');
+                setPaymentState('select');
+              }
+            }, 1000);
+            return;
+          }
+        } catch (directError) {
+          console.log('Direct connection failed, falling back to modal:', directError);
+        }
+      }
+
+      // Fallback to wallet adapter modal
       await connect();
-      console.log('Connect function completed, checking connection status...');
+      console.log('Modal connect function completed, checking connection status...');
+
       // Check if we're now connected
       if (connected) {
         setPaymentState('confirming');
@@ -130,7 +178,7 @@ export default function CryptoPayment({
             setError('Please complete wallet connection in the popup');
             setPaymentState('select');
           }
-        }, 2000);
+        }, 3000);
       }
     } catch (err) {
       console.error('Connect error:', err);
@@ -275,7 +323,7 @@ export default function CryptoPayment({
               style={styles.buyButtonGradient}
             >
               <Text style={styles.buyButtonText}>
-                🔗 Select Wallet
+                {phantomAvailable ? '👻 Connect Phantom' : '🔗 Select Wallet'}
               </Text>
             </LinearGradient>
           </Pressable>

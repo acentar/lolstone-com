@@ -148,23 +148,56 @@ function WebWalletContextBridge({
     wallets: wallet.wallets?.length || 0,
   });
 
+  // Direct Phantom connection as fallback
+  const connectPhantomDirectly = async (): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+
+    try {
+      // Check if Phantom is available
+      const { solana } = window as any;
+      if (!solana?.isPhantom) {
+        console.log('Phantom not detected');
+        return false;
+      }
+
+      console.log('Phantom detected, attempting direct connection...');
+
+      // Request connection
+      const response = await solana.connect();
+      console.log('Phantom connected:', response.publicKey.toString());
+
+      // Update wallet state manually (this is a hack, but might work)
+      // The wallet adapter should pick this up automatically
+      return true;
+    } catch (error) {
+      console.error('Direct Phantom connection failed:', error);
+      return false;
+    }
+  };
+
   const value: WalletContextType = {
     connected: wallet.connected,
     publicKey: wallet.publicKey,
     connecting: wallet.connecting,
-    connect: () => {
-      console.log('Opening wallet modal...');
+    connect: async () => {
+      console.log('Attempting wallet connection...');
+
+      // First try direct Phantom connection
+      const directSuccess = await connectPhantomDirectly();
+      if (directSuccess) {
+        console.log('Direct connection successful');
+        return;
+      }
+
+      // Fallback to modal
+      console.log('Falling back to modal...');
       console.log('Available wallets:', wallet.wallets?.length);
 
-      // Try to open modal, but also log available wallets
       if (wallet.wallets && wallet.wallets.length > 0) {
         console.log('Available wallets:', wallet.wallets.map(w => w.adapter.name));
-        setVisible(true);
-      } else {
-        console.log('No wallets detected, trying to open modal anyway');
-        setVisible(true);
       }
-      return Promise.resolve();
+
+      setVisible(true);
     },
     disconnect: wallet.disconnect,
     signAndSendTransaction: async (transaction: Transaction) => {
