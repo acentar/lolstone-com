@@ -52,7 +52,7 @@ export default function CryptoPayment({
   playerId,
 }: CryptoPaymentProps) {
   // Use wallet context for Phantom connection
-  const { connected, publicKey, connecting, connect, signAndSendTransaction, connection } = useWalletContext();
+  const { connected, publicKey, connecting, connect, disconnect, signAndSendTransaction, connection } = useWalletContext();
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
@@ -208,10 +208,60 @@ export default function CryptoPayment({
     onClose();
   };
 
+  // New: Connect wallet first screen
+  const renderConnectFirst = () => (
+    <Animated.View entering={FadeIn} style={styles.connectFirstContainer}>
+      <Text style={styles.connectFirstEmoji}>👻</Text>
+      <Text style={styles.title}>Connect Your Wallet</Text>
+      <Text style={styles.subtitle}>Connect your Phantom wallet to buy ducats with crypto</Text>
+      
+      {!phantomAvailable && Platform.OS === 'web' && (
+        <View style={styles.installPrompt}>
+          <Text style={styles.installPromptText}>
+            Phantom wallet extension not detected.
+          </Text>
+          <Pressable 
+            style={styles.installButton}
+            onPress={() => window.open('https://phantom.app/', '_blank')}
+          >
+            <Text style={styles.installButtonText}>Install Phantom →</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {(phantomAvailable || Platform.OS !== 'web') && (
+        <Pressable
+          style={styles.connectButton}
+          onPress={handleConnect}
+          disabled={connecting}
+        >
+          <LinearGradient
+            colors={['#8b5cf6', '#a855f7']}
+            style={styles.connectButtonGradient}
+          >
+            {connecting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.connectButtonText}>
+                👻 Connect Phantom Wallet
+              </Text>
+            )}
+          </LinearGradient>
+        </Pressable>
+      )}
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+
   const renderPackageSelection = () => (
     <Animated.View entering={FadeIn} style={styles.packagesContainer}>
       <Text style={styles.title}>💎 Buy Ducats</Text>
-      <Text style={styles.subtitle}>Pay with crypto via Phantom</Text>
+      <Text style={styles.subtitle}>Select a package below</Text>
 
       <View style={styles.packages}>
         {DUCAT_PACKAGES.map((pkg) => (
@@ -276,49 +326,20 @@ export default function CryptoPayment({
       )}
 
       {selectedPackage && (
-        connected ? (
-          <Pressable
-            style={styles.buyButton}
-            onPress={handlePurchase}
+        <Pressable
+          style={styles.buyButton}
+          onPress={handlePurchase}
+          disabled={!connection}
+        >
+          <LinearGradient
+            colors={connection ? ['#22c55e', '#16a34a'] : ['#4b5563', '#374151']}
+            style={styles.buyButtonGradient}
           >
-            <LinearGradient
-              colors={['#22c55e', '#16a34a']}
-              style={styles.buyButtonGradient}
-            >
-              <Text style={styles.buyButtonText}>
-                🔐 Confirm Purchase
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        ) : Platform.OS === 'web' ? (
-          <Pressable
-            style={styles.buyButton}
-            onPress={handleConnect}
-          >
-            <LinearGradient
-              colors={['#8b5cf6', '#a855f7']}
-              style={styles.buyButtonGradient}
-            >
-              <Text style={styles.buyButtonText}>
-                {phantomAvailable ? '👻 Connect Phantom' : '🔗 Install Phantom Wallet'}
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        ) : (
-          <Pressable
-            style={styles.buyButton}
-            onPress={handleConnect}
-          >
-            <LinearGradient
-              colors={['#22c55e', '#16a34a']}
-              style={styles.buyButtonGradient}
-            >
-              <Text style={styles.buyButtonText}>
-                👻 Connect Phantom
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        )
+            <Text style={styles.buyButtonText}>
+              {connection ? '🔐 Confirm Purchase' : '⏳ Loading...'}
+            </Text>
+          </LinearGradient>
+        </Pressable>
       )}
 
       {error && (
@@ -392,18 +413,27 @@ export default function CryptoPayment({
             <Text style={styles.closeButtonText}>✕</Text>
           </Pressable>
 
-          {/* Connection Status */}
+          {/* Connection Status - always show if connected */}
           {connected && publicKey && (
             <View style={styles.walletStatus}>
               <Text style={styles.walletIcon}>👻</Text>
               <Text style={styles.walletAddress}>
-                {publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}
+                {typeof publicKey === 'string' 
+                  ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
+                  : publicKey.toBase58 
+                    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+                    : 'Connected'
+                }
               </Text>
+              <Pressable onPress={disconnect} style={styles.disconnectButton}>
+                <Text style={styles.disconnectText}>Disconnect</Text>
+              </Pressable>
             </View>
           )}
 
           {/* Content based on state */}
-          {paymentState === 'select' && renderPackageSelection()}
+          {paymentState === 'select' && !connected && renderConnectFirst()}
+          {paymentState === 'select' && connected && renderPackageSelection()}
           {paymentState === 'connecting' && renderConnecting()}
           {paymentState === 'processing' && renderProcessing()}
           {paymentState === 'success' && renderSuccess()}
@@ -677,6 +707,68 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // New styles for connect first flow
+  connectFirstContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  connectFirstEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  installPrompt: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  installPromptText: {
+    color: '#fca5a5',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  installButton: {
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+  installButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  connectButton: {
+    marginTop: 24,
+    borderRadius: 16,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  connectButtonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  connectButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  disconnectButton: {
+    marginLeft: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderRadius: 8,
+  },
+  disconnectText: {
+    color: '#fca5a5',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 

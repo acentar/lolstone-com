@@ -1,5 +1,5 @@
-// Polyfills temporarily disabled for debugging
-// import '../src/polyfills';
+// Import polyfills for Solana/Buffer support
+import '../src/polyfills';
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

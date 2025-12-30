@@ -1,16 +1,29 @@
 /**
  * Polyfills for Solana web3.js in React Native/Expo
+ * 
+ * This file MUST be imported before any Solana libraries are used.
+ * It provides Buffer and other Node.js polyfills for browser environments.
  */
 
 import { Buffer } from 'buffer';
 
-// Polyfill Buffer globally
+// Polyfill Buffer globally - ensure it's available everywhere
 if (typeof globalThis !== 'undefined') {
   globalThis.Buffer = Buffer;
 }
 if (typeof global !== 'undefined') {
   global.Buffer = Buffer;
 }
+if (typeof window !== 'undefined') {
+  window.Buffer = Buffer;
+}
+
+// Also set it directly on the global object as a fallback
+try {
+  if (!globalThis.Buffer) globalThis.Buffer = Buffer;
+} catch (e) {}
+
+console.log('Polyfills loaded - Buffer available:', typeof Buffer !== 'undefined');
 
 // Polyfill process if needed
 if (typeof globalThis !== 'undefined' && !globalThis.process) {
