@@ -121,53 +121,35 @@ export default function CryptoPayment({
     try {
       console.log('Attempting to connect wallet...');
 
-      // If Phantom is available, try direct connection first
-      if (Platform.OS === 'web' && phantomAvailable && typeof window !== 'undefined') {
-        try {
-          console.log('Trying direct Phantom connection...');
-          const { solana } = window as any;
-
-          if (solana?.isPhantom) {
-            const response = await solana.connect();
-            console.log('Direct Phantom connection successful:', response.publicKey.toString());
-
-            // Wait a moment for the wallet context to update
-            setTimeout(() => {
-              if (connected) {
-                setPaymentState('confirming');
-              } else {
-                setError('Connection successful but not detected. Please refresh and try again.');
-                setPaymentState('select');
-              }
-            }, 1000);
-            return;
-          }
-        } catch (directError) {
-          console.log('Direct connection failed, falling back to modal:', directError);
+      if (Platform.OS === 'web') {
+        if (!phantomAvailable) {
+          // Phantom not available, guide user to install it
+          setError('Please install the Phantom wallet extension from https://phantom.app/ and refresh the page.');
+          setPaymentState('select');
+          return;
         }
-      }
 
-      // Fallback to wallet adapter modal
-      await connect();
-      console.log('Modal connect function completed, checking connection status...');
+        // Try direct Phantom connection
+        console.log('Trying direct Phantom connection...');
+        await connect();
 
-      // Check if we're now connected
-      if (connected) {
-        setPaymentState('confirming');
-      } else {
-        // If not connected yet, wait a bit and check again
+        // Check if connection was successful
         setTimeout(() => {
           if (connected) {
             setPaymentState('confirming');
           } else {
-            setError('Please complete wallet connection in the popup');
+            setError('Connection failed. Please try again or refresh the page.');
             setPaymentState('select');
           }
-        }, 3000);
+        }, 2000);
+      } else {
+        // Mobile - use deep linking
+        await connect();
+        setPaymentState('confirming');
       }
     } catch (err) {
       console.error('Connect error:', err);
-      setError('Failed to connect wallet');
+      setError('Failed to connect wallet. Please try again.');
       setPaymentState('select');
     }
   };
@@ -308,7 +290,7 @@ export default function CryptoPayment({
               style={styles.buyButtonGradient}
             >
               <Text style={styles.buyButtonText}>
-                👻 Connect Phantom
+                {phantomAvailable ? '👻 Connect Phantom' : '🔗 Install Phantom Wallet'}
               </Text>
             </LinearGradient>
           </Pressable>

@@ -2,24 +2,191 @@
  * Wallet Context for Solana/Phantom Integration
  *
  * Provides wallet connection and transaction capabilities for both web and mobile.
- * Web: Uses @solana/wallet-adapter
+ * Web: Uses direct Phantom connection (no wallet adapter)
  * Mobile: Uses deep linking to Phantom app
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
 
-// Only import wallet adapter on web
-let WalletAdapterNetwork: any;
-let useWallet: any;
-let useConnection: any;
-let ConnectionProvider: any;
-let WalletProvider: any;
-let WalletModalProvider: any;
-let PhantomWalletAdapter: any;
-
-// Check if we're on web and dynamically import wallet adapter
+// Check if we're on web
 const isWeb = Platform.OS === 'web';
+
+interface WalletContextType {
+  connected: boolean;
+  publicKey: string | null;
+  connecting: boolean;
+  connect: () => Promise<void>;
+  disconnect: () => Promise<void>;
+  signAndSendTransaction: (transaction: any) => Promise<string>;
+  connection: any;
+}
+
+const WalletContext = createContext<WalletContextType>({
+  connected: false,
+  publicKey: null,
+  connecting: false,
+  connect: async () => {},
+  disconnect: async () => {},
+  signAndSendTransaction: async () => '',
+  connection: null,
+});
+
+export const useWalletContext = () => useContext(WalletContext);
+
+/**
+ * Web Wallet Provider - simplified, direct Phantom connection only
+ */
+function WebWalletProvider({ children }: { children: ReactNode }) {
+  const [connected, setConnected] = useState(false);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+
+  const connectPhantomDirectly = async (): Promise<boolean> => {
+    if (!isWeb || typeof window === 'undefined') return false;
+
+    try {
+      const { solana } = window as any;
+      if (!solana?.isPhantom) {
+        console.log('Phantom not detected');
+        return false;
+      }
+
+      console.log('Phantom detected, attempting direct connection...');
+      const response = await solana.connect();
+      console.log('Phantom connected:', response.publicKey.toString());
+
+      setConnected(true);
+      setPublicKey(response.publicKey.toString());
+      return true;
+    } catch (error) {
+      console.error('Direct Phantom connection failed:', error);
+      return false;
+    }
+  };
+
+  const connect = async () => {
+    setConnecting(true);
+    const success = await connectPhantomDirectly();
+    setConnecting(false);
+
+    if (!success) {
+      console.log('Direct connection failed, you may need to refresh and try again');
+    }
+  };
+
+  const disconnect = async () => {
+    if (isWeb && typeof window !== 'undefined') {
+      try {
+        const { solana } = window as any;
+        if (solana?.disconnect) {
+          await solana.disconnect();
+        }
+      } catch (error) {
+        console.error('Disconnect error:', error);
+      }
+    }
+    setConnected(false);
+    setPublicKey(null);
+  };
+
+  const signAndSendTransaction = async (transaction: any): Promise<string> => {
+    if (!isWeb || typeof window === 'undefined') {
+      throw new Error('Not on web platform');
+    }
+
+    if (!connected) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const { solana } = window as any;
+      const { signature } = await solana.signAndSendTransaction(transaction);
+      return signature;
+    } catch (error) {
+      console.error('Transaction signing failed:', error);
+      throw error;
+    }
+  };
+
+  const value: WalletContextType = {
+    connected,
+    publicKey,
+    connecting,
+    connect,
+    disconnect,
+    signAndSendTransaction,
+    connection: null, // Not used for direct connection
+  };
+
+  return (
+    <WalletContext.Provider value={value}>
+      {children}
+    </WalletContext.Provider>
+  );
+}
+
+/**
+ * Mobile Wallet Provider using deep linking
+ */
+function MobileWalletProvider({ children }: { children: ReactNode }) {
+  const [connected, setConnected] = useState(false);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const Linking = await import('expo-linking');
+
+      const redirectUrl = Linking.createURL('phantom-connect');
+      const phantomConnectUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent('https://lolstone.com')}&redirect_link=${encodeURIComponent(redirectUrl)}`;
+
+      await Linking.openURL(phantomConnectUrl);
+    } catch (error) {
+      console.error('Failed to connect:', error);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setConnected(false);
+    setPublicKey(null);
+  };
+
+  const signAndSendTransaction = async (transaction: any): Promise<string> => {
+    throw new Error('Mobile transaction signing not implemented');
+  };
+
+  const value: WalletContextType = {
+    connected,
+    publicKey,
+    connecting,
+    connect,
+    disconnect,
+    signAndSendTransaction,
+    connection: null,
+  };
+
+  return (
+    <WalletContext.Provider value={value}>
+      {children}
+    </WalletContext.Provider>
+  );
+}
+
+/**
+ * Main Wallet Provider
+ */
+export function WalletContextProvider({ children }: { children: ReactNode }) {
+  if (isWeb) {
+    return <WebWalletProvider>{children}</WebWalletProvider>;
+  }
+  return <MobileWalletProvider>{children}</MobileWalletProvider>;
+}
+
+export default WalletContext;
 
 interface WalletContextType {
   connected: boolean;
