@@ -89,7 +89,9 @@ export default function CryptoPayment({
   // Load WalletMultiButton for web
   useEffect(() => {
     if (Platform.OS === 'web' && visible) {
+      console.log('Loading WalletMultiButton for web...');
       import('@solana/wallet-adapter-react-ui').then(module => {
+        console.log('WalletMultiButton loaded successfully');
         setWalletButtonComponent(() => module.WalletMultiButton);
         setWalletButtonLoaded(true);
       }).catch(err => {
@@ -263,10 +265,20 @@ export default function CryptoPayment({
               </Text>
             </LinearGradient>
           </Pressable>
-        ) : Platform.OS === 'web' && WalletButtonComponent && walletButtonLoaded ? (
-          <View style={styles.walletButtonContainer}>
-            <WalletButtonComponent />
-          </View>
+        ) : Platform.OS === 'web' ? (
+          <Pressable
+            style={styles.buyButton}
+            onPress={handleConnect}
+          >
+            <LinearGradient
+              colors={['#8b5cf6', '#a855f7']}
+              style={styles.buyButtonGradient}
+            >
+              <Text style={styles.buyButtonText}>
+                🔗 Select Wallet
+              </Text>
+            </LinearGradient>
+          </Pressable>
         ) : (
           <Pressable
             style={styles.buyButton}

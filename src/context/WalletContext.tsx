@@ -62,10 +62,16 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
           import('@solana/wallet-adapter-react'),
           import('@solana/wallet-adapter-wallets'),
           import('@solana/wallet-adapter-react-ui'),
+          import('@solana/web3.js'), // Also import web3 for clusterApiUrl
         ]);
 
         // Import CSS for wallet modal (web only)
+        console.log('Loading wallet adapter CSS...');
         await import('@solana/wallet-adapter-react-ui/styles.css');
+
+        // Store web3 for later use
+        console.log('Loading web3.js...');
+        const web3 = await import('@solana/web3.js');
 
         setWalletComponents({
           ConnectionProvider: walletAdapterReact.ConnectionProvider,
@@ -76,6 +82,8 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
           WalletModalProvider: walletAdapterReactUi.WalletModalProvider,
           WalletMultiButton: walletAdapterReactUi.WalletMultiButton,
           PhantomWalletAdapter: walletAdapterWallets.PhantomWalletAdapter,
+          SolflareWalletAdapter: walletAdapterWallets.SolflareWalletAdapter,
+          clusterApiUrl: web3.clusterApiUrl,
         });
       } catch (error) {
         console.error('Failed to load wallet adapter:', error);
@@ -91,9 +99,18 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  const { ConnectionProvider, WalletProvider, WalletModalProvider, PhantomWalletAdapter } = WalletComponents;
+  const { ConnectionProvider, WalletProvider, WalletModalProvider, PhantomWalletAdapter, SolflareWalletAdapter, clusterApiUrl } = WalletComponents;
+
   const endpoint = clusterApiUrl('mainnet-beta');
-  const wallets = [new PhantomWalletAdapter()];
+
+  // Include multiple wallets for better detection
+  const wallets = [
+    new PhantomWalletAdapter(),
+    new SolflareWalletAdapter(),
+  ];
+
+  console.log('Setting up wallet provider with', wallets.length, 'wallets');
+  console.log('Wallets:', wallets.map(w => w.name));
 
   return (
     <ConnectionProvider endpoint={endpoint}>
@@ -123,13 +140,30 @@ function WebWalletContextBridge({
   const { connection } = useConnection();
   const { setVisible } = useWalletModal();
 
+  // Debug wallet state
+  console.log('Wallet state:', {
+    connected: wallet.connected,
+    connecting: wallet.connecting,
+    publicKey: wallet.publicKey?.toString(),
+    wallets: wallet.wallets?.length || 0,
+  });
+
   const value: WalletContextType = {
     connected: wallet.connected,
     publicKey: wallet.publicKey,
     connecting: wallet.connecting,
     connect: () => {
       console.log('Opening wallet modal...');
-      setVisible(true);
+      console.log('Available wallets:', wallet.wallets?.length);
+
+      // Try to open modal, but also log available wallets
+      if (wallet.wallets && wallet.wallets.length > 0) {
+        console.log('Available wallets:', wallet.wallets.map(w => w.adapter.name));
+        setVisible(true);
+      } else {
+        console.log('No wallets detected, trying to open modal anyway');
+        setVisible(true);
+      }
       return Promise.resolve();
     },
     disconnect: wallet.disconnect,
