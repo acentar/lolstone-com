@@ -7,25 +7,32 @@ import { Database } from '../types/database';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Check if we're in a browser environment (not SSR/Node)
+const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
 // Custom storage adapter for Supabase auth
-// Uses SecureStore on native, localStorage on web
+// Uses SecureStore on native, localStorage on web, and no-op storage for SSR
 const ExpoSecureStoreAdapter = {
   getItem: async (key: string): Promise<string | null> => {
+    // During SSR/static rendering, return null
     if (Platform.OS === 'web') {
-      return localStorage.getItem(key);
+      if (!isBrowser) return null;
+      return window.localStorage.getItem(key);
     }
     return SecureStore.getItemAsync(key);
   },
   setItem: async (key: string, value: string): Promise<void> => {
     if (Platform.OS === 'web') {
-      localStorage.setItem(key, value);
+      if (!isBrowser) return;
+      window.localStorage.setItem(key, value);
       return;
     }
     await SecureStore.setItemAsync(key, value);
   },
   removeItem: async (key: string): Promise<void> => {
     if (Platform.OS === 'web') {
-      localStorage.removeItem(key);
+      if (!isBrowser) return;
+      window.localStorage.removeItem(key);
       return;
     }
     await SecureStore.deleteItemAsync(key);
