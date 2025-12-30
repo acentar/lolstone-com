@@ -37,12 +37,13 @@ export const useWalletContext = () => useContext(WalletContext);
 /**
  * Web Wallet Provider - simplified, direct Phantom connection only
  * 
- * Uses Helius RPC for better reliability (free tier: 100k requests/day)
- * Falls back to public RPC if needed
+ * Uses free public RPCs that don't require API keys
  */
 
-// Free Helius RPC endpoint (public, generous limits)
-const HELIUS_RPC = 'https://mainnet.helius-rpc.com/?api-key=1d8740dc-e5f4-421c-b823-e1bad1889eff';
+// Free public RPC endpoints (no API key required)
+// Ankr is fast and reliable with generous free limits
+const PRIMARY_RPC = 'https://rpc.ankr.com/solana';
+// Fallback to Solana's public RPC
 const FALLBACK_RPC = 'https://api.mainnet-beta.solana.com';
 
 function WebWalletProvider({ children }: { children: ReactNode }) {
@@ -51,15 +52,15 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState<any>(null);
 
-  // Create Solana connection on mount with Helius RPC
+  // Create Solana connection on mount with free public RPC
   useEffect(() => {
     const createConnection = async () => {
       try {
         const { Connection } = await import('@solana/web3.js');
-        // Use Helius RPC for better reliability
-        const conn = new Connection(HELIUS_RPC, 'confirmed');
+        // Use Ankr RPC (free, no API key required)
+        const conn = new Connection(PRIMARY_RPC, 'confirmed');
         setConnection(conn);
-        console.log('Solana connection created (Helius RPC)');
+        console.log('Solana connection created (Ankr RPC)');
       } catch (error) {
         console.error('Failed to create Solana connection:', error);
         // Try fallback
@@ -206,15 +207,15 @@ function MobileWalletProvider({ children }: { children: ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState<any>(null);
 
-  // Create Solana connection on mount with Helius RPC
+  // Create Solana connection on mount with free public RPC
   useEffect(() => {
     const createConnection = async () => {
       try {
         const { Connection } = await import('@solana/web3.js');
-        // Use Helius RPC for better reliability
-        const conn = new Connection(HELIUS_RPC, 'confirmed');
+        // Use Ankr RPC (free, no API key required)
+        const conn = new Connection(PRIMARY_RPC, 'confirmed');
         setConnection(conn);
-        console.log('Mobile Solana connection created (Helius RPC)');
+        console.log('Mobile Solana connection created (Ankr RPC)');
       } catch (error) {
         console.error('Failed to create mobile Solana connection:', error);
       }
