@@ -1,25 +1,17 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  TextInput,
-  RefreshControl,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { Text, Card, Button, TextInput, Chip, Divider, ProgressBar } from 'react-native-paper';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { CardDesign } from '../../src/types/database';
-import { colors, typography, spacing, borderRadius, shadows } from '../../src/constants/theme';
+import { adminColors, adminSpacing, adminRadius } from '../../src/constants/adminTheme';
 
 const RARITY_COLORS: Record<string, string> = {
-  common: colors.common,
-  uncommon: colors.uncommon,
-  rare: colors.rare,
-  epic: colors.epic,
-  legendary: colors.legendary,
+  common: adminColors.common,
+  uncommon: adminColors.uncommon,
+  rare: adminColors.rare,
+  epic: adminColors.epic,
+  legendary: adminColors.legendary,
 };
 
 export default function MintScreen() {
@@ -62,7 +54,6 @@ export default function MintScreen() {
       return;
     }
 
-    // Check max supply
     if (selectedDesign.max_supply) {
       const remaining = selectedDesign.max_supply - selectedDesign.total_minted;
       if (amount > remaining) {
@@ -74,13 +65,11 @@ export default function MintScreen() {
     setMinting(true);
 
     try {
-      // Get current edition
       const { data: currentEditionData } = await supabase
         .rpc('get_current_edition', { design_uuid: selectedDesign.id });
       
       const newEdition = (currentEditionData || 0) + 1;
 
-      // Create card instances
       const instances = Array.from({ length: amount }, (_, i) => ({
         design_id: selectedDesign.id,
         edition: newEdition,
@@ -95,7 +84,6 @@ export default function MintScreen() {
 
       if (insertError) throw insertError;
 
-      // Update total_minted count
       const { error: updateError } = await supabase
         .from('card_designs')
         .update({ total_minted: selectedDesign.total_minted + amount })
@@ -103,7 +91,6 @@ export default function MintScreen() {
 
       if (updateError) throw updateError;
 
-      // Log transaction
       await supabase.from('transactions').insert({
         type: 'mint',
         game_master_id: gameMaster.id,
@@ -111,7 +98,7 @@ export default function MintScreen() {
       });
 
       Alert.alert(
-        '⚡ Cards Minted!',
+        'Cards Minted!',
         `Successfully minted ${amount} copies of "${selectedDesign.name}"\n\nEdition #${newEdition}\nSerial Numbers: #1 - #${amount}`
       );
 
@@ -131,10 +118,11 @@ export default function MintScreen() {
     fetchDesigns();
   };
 
-  const getAvailableToMint = (design: CardDesign): string => {
-    if (!design.max_supply) return '∞';
+  const getSupplyInfo = (design: CardDesign) => {
+    if (!design.max_supply) return { remaining: '∞', progress: 0, hasLimit: false };
     const remaining = design.max_supply - design.total_minted;
-    return remaining.toString();
+    const progress = design.total_minted / design.max_supply;
+    return { remaining: remaining.toString(), progress, hasLimit: true };
   };
 
   return (
@@ -142,111 +130,125 @@ export default function MintScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.primary}
-        />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={adminColors.primary} />
       }
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>⚡ Minting Station</Text>
-        <Text style={styles.subtitle}>
-          Create permanent card instances from designs
-        </Text>
+        <Text style={styles.title}>Minting Station</Text>
+        <Text style={styles.subtitle}>Create permanent card instances from designs</Text>
       </View>
 
-      {/* Selected Design Preview */}
       {selectedDesign ? (
-        <View style={styles.mintPanel}>
-          <View style={styles.selectedCard}>
-            <View style={[styles.cardBadge, { backgroundColor: RARITY_COLORS[selectedDesign.rarity] }]}>
-              <Text style={styles.cardBadgeText}>{selectedDesign.rarity.toUpperCase()}</Text>
+        /* Minting Panel */
+        <Card style={styles.mintPanel} mode="elevated">
+          <Card.Content>
+            <View style={styles.selectedHeader}>
+              <View>
+                <Chip style={{ backgroundColor: RARITY_COLORS[selectedDesign.rarity] + '20' }}>
+                  {selectedDesign.rarity.toUpperCase()}
+                </Chip>
+              </View>
+              <Button mode="text" onPress={() => setSelectedDesign(null)}>Cancel</Button>
             </View>
-            <Text style={styles.selectedCardName}>{selectedDesign.name}</Text>
-            <Text style={styles.selectedCardStats}>
-              {selectedDesign.total_minted} minted • {getAvailableToMint(selectedDesign)} available
-            </Text>
-          </View>
 
-          <View style={styles.mintForm}>
-            <Text style={styles.inputLabel}>MINT AMOUNT</Text>
+            <Text style={styles.selectedName}>{selectedDesign.name}</Text>
+            
+            <View style={styles.supplyInfo}>
+              <Text style={styles.supplyLabel}>
+                {selectedDesign.total_minted} minted
+                {selectedDesign.max_supply && ` / ${selectedDesign.max_supply} max`}
+              </Text>
+              {selectedDesign.max_supply && (
+                <ProgressBar 
+                  progress={selectedDesign.total_minted / selectedDesign.max_supply} 
+                  color={adminColors.accent}
+                  style={styles.supplyBar}
+                />
+              )}
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <Text style={styles.inputLabel}>Mint Amount</Text>
             <TextInput
-              style={styles.mintInput}
               value={mintAmount}
               onChangeText={setMintAmount}
+              mode="outlined"
               keyboardType="numeric"
-              placeholder="10"
-              placeholderTextColor={colors.textMuted}
+              style={styles.mintInput}
             />
-            
+
             <View style={styles.quickAmounts}>
               {['10', '25', '50', '100'].map((amt) => (
-                <Pressable
+                <Chip
                   key={amt}
-                  style={[styles.quickButton, mintAmount === amt && styles.quickButtonActive]}
+                  selected={mintAmount === amt}
                   onPress={() => setMintAmount(amt)}
+                  style={styles.quickChip}
                 >
-                  <Text style={[styles.quickButtonText, mintAmount === amt && styles.quickButtonTextActive]}>
-                    {amt}
-                  </Text>
-                </Pressable>
+                  {amt}
+                </Chip>
               ))}
             </View>
 
-            <Pressable
-              style={[styles.mintButton, minting && styles.mintButtonDisabled]}
+            <Button
+              mode="contained"
               onPress={handleMint}
+              loading={minting}
               disabled={minting}
+              style={styles.mintButton}
+              contentStyle={styles.mintButtonContent}
             >
-              <Text style={styles.mintButtonText}>
-                {minting ? 'MINTING...' : `⚡ MINT ${mintAmount} CARDS`}
-              </Text>
-            </Pressable>
-
-            <Pressable style={styles.cancelButton} onPress={() => setSelectedDesign(null)}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
+              Mint {mintAmount} Cards
+            </Button>
+          </Card.Content>
+        </Card>
       ) : (
+        /* Design Selection */
         <>
           <Text style={styles.sectionTitle}>Select a Design to Mint</Text>
-          
+
           {designs.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🎨</Text>
-              <Text style={styles.emptyTitle}>No Designs Yet</Text>
-              <Text style={styles.emptyText}>
-                Create card designs first, then mint them here
-              </Text>
-            </View>
+            <Card style={styles.emptyCard} mode="outlined">
+              <Card.Content style={styles.emptyContent}>
+                <Text style={styles.emptyIcon}>🎨</Text>
+                <Text style={styles.emptyTitle}>No Designs Yet</Text>
+                <Text style={styles.emptyText}>Create card designs first, then mint them here</Text>
+              </Card.Content>
+            </Card>
           ) : (
             <View style={styles.designsGrid}>
-              {designs.map((design) => (
-                <Pressable
-                  key={design.id}
-                  style={[styles.designCard, { borderColor: RARITY_COLORS[design.rarity] }]}
-                  onPress={() => setSelectedDesign(design)}
-                >
-                  <View style={[styles.designRarity, { backgroundColor: RARITY_COLORS[design.rarity] }]}>
-                    <Text style={styles.designRarityText}>{design.rarity.charAt(0).toUpperCase()}</Text>
-                  </View>
-                  <Text style={styles.designName} numberOfLines={1}>{design.name}</Text>
-                  <Text style={styles.designType}>{design.card_type.replace('_', ' ')}</Text>
-                  <View style={styles.designStats}>
-                    <Text style={styles.designMinted}>
-                      {design.total_minted} minted
-                    </Text>
-                    {design.max_supply && (
-                      <Text style={styles.designSupply}>
-                        / {design.max_supply}
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              ))}
+              {designs.map((design) => {
+                const supply = getSupplyInfo(design);
+                return (
+                  <Card
+                    key={design.id}
+                    style={styles.designCard}
+                    mode="elevated"
+                    onPress={() => setSelectedDesign(design)}
+                  >
+                    <View style={[styles.designRarityBar, { backgroundColor: RARITY_COLORS[design.rarity] }]} />
+                    <Card.Content style={styles.designContent}>
+                      <Text style={styles.designName} numberOfLines={1}>{design.name}</Text>
+                      <Text style={styles.designType}>{design.card_type.replace('_', ' ')}</Text>
+                      <View style={styles.designStats}>
+                        <Text style={styles.designMinted}>{design.total_minted} minted</Text>
+                        {supply.hasLimit && (
+                          <Text style={styles.designRemaining}>{supply.remaining} left</Text>
+                        )}
+                      </View>
+                      {supply.hasLimit && (
+                        <ProgressBar 
+                          progress={supply.progress} 
+                          color={RARITY_COLORS[design.rarity]}
+                          style={styles.designProgress}
+                        />
+                      )}
+                    </Card.Content>
+                  </Card>
+                );
+              })}
             </View>
           )}
         </>
@@ -258,210 +260,165 @@ export default function MintScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: adminColors.background,
   },
   content: {
-    padding: spacing.lg,
+    padding: adminSpacing.lg,
   },
 
   // Header
   header: {
-    marginBottom: spacing.xl,
+    marginBottom: adminSpacing.xl,
   },
   title: {
-    ...typography.h2,
-    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '700',
+    color: adminColors.textPrimary,
   },
   subtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    marginTop: 4,
   },
 
   // Section
   sectionTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
+    fontSize: 18,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.md,
   },
 
   // Empty State
-  emptyState: {
-    alignItems: 'center',
-    padding: spacing.xxl,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+  emptyCard: {
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    borderColor: adminColors.border,
   },
-  emptyEmoji: {
+  emptyContent: {
+    alignItems: 'center',
+    padding: adminSpacing.xl,
+  },
+  emptyIcon: {
     fontSize: 48,
-    marginBottom: spacing.md,
+    marginBottom: adminSpacing.md,
   },
   emptyTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
+    fontSize: 18,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
   },
   emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: adminColors.textSecondary,
     textAlign: 'center',
+    marginTop: adminSpacing.xs,
   },
 
   // Designs Grid
   designsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    gap: adminSpacing.md,
   },
   designCard: {
     flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 2,
-    ...shadows.sm,
+    minWidth: 160,
+    maxWidth: 200,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    overflow: 'hidden',
   },
-  designRarity: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
+  designRarityBar: {
+    height: 4,
   },
-  designRarityText: {
-    ...typography.label,
-    color: colors.background,
-    fontSize: 12,
+  designContent: {
+    padding: adminSpacing.md,
   },
   designName: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
     marginBottom: 4,
   },
   designType: {
-    ...typography.label,
-    color: colors.textMuted,
-    fontSize: 9,
-    marginBottom: spacing.sm,
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    textTransform: 'capitalize',
+    marginBottom: adminSpacing.sm,
   },
   designStats: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   designMinted: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: adminColors.textSecondary,
   },
-  designSupply: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
+  designRemaining: {
+    fontSize: 12,
+    color: adminColors.success,
+  },
+  designProgress: {
+    marginTop: adminSpacing.sm,
+    height: 4,
+    borderRadius: 2,
   },
 
   // Mint Panel
   mintPanel: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    ...shadows.lg,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
   },
-  selectedCard: {
+  selectedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.lg,
+    marginBottom: adminSpacing.md,
   },
-  cardBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    marginBottom: spacing.sm,
+  selectedName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.sm,
   },
-  cardBadgeText: {
-    ...typography.label,
-    color: colors.background,
-    fontSize: 10,
+  supplyInfo: {
+    marginBottom: adminSpacing.md,
   },
-  selectedCardName: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    textAlign: 'center',
+  supplyLabel: {
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    marginBottom: adminSpacing.xs,
   },
-  selectedCardStats: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+  supplyBar: {
+    height: 6,
+    borderRadius: 3,
   },
-
-  // Mint Form
-  mintForm: {
-    gap: spacing.md,
+  divider: {
+    marginVertical: adminSpacing.lg,
   },
   inputLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+    color: adminColors.textSecondary,
+    marginBottom: adminSpacing.sm,
   },
   mintInput: {
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    color: colors.textPrimary,
-    ...typography.h2,
-    textAlign: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: adminColors.surface,
+    marginBottom: adminSpacing.md,
   },
   quickAmounts: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: adminSpacing.sm,
+    marginBottom: adminSpacing.lg,
   },
-  quickButton: {
+  quickChip: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  quickButtonActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryGlow,
-  },
-  quickButtonText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  quickButtonTextActive: {
-    color: colors.primary,
   },
   mintButton: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
+    borderRadius: adminRadius.md,
   },
-  mintButtonDisabled: {
-    opacity: 0.6,
-  },
-  mintButtonText: {
-    ...typography.label,
-    color: colors.textPrimary,
-    fontSize: 14,
-  },
-  cancelButton: {
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    ...typography.body,
-    color: colors.textMuted,
+  mintButtonContent: {
+    paddingVertical: adminSpacing.xs,
   },
 });
-

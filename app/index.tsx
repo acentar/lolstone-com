@@ -9,16 +9,18 @@ export default function IndexScreen() {
   const router = useRouter();
 
   useEffect(() => {
+    console.log('Auth state:', { loading, user: user?.email, isGameMaster });
+    
     if (loading) return;
 
     if (!user) {
-      // Not logged in - go to login
+      console.log('No user, redirecting to login');
       router.replace('/auth/login');
     } else if (isGameMaster) {
-      // Game Master - go to GMP dashboard
+      console.log('Game Master detected, going to GMP');
       router.replace('/gmp');
     } else {
-      // Regular player - go to player home (to be built)
+      console.log('Regular user, going to player');
       router.replace('/player');
     }
   }, [loading, user, isGameMaster]);

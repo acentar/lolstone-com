@@ -33,13 +33,21 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
 
-    const { error: authError } = await signIn(email, password);
+    try {
+      const { error: authError } = await signIn(email, password);
 
-    if (authError) {
-      setError(authError.message);
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+      } else {
+        // Login successful - navigate to root which will redirect to GMP or player
+        console.log('Login successful, navigating to /');
+        router.replace('/');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Login failed');
       setLoading(false);
     }
-    // If successful, the auth context will trigger navigation
   };
 
   return (

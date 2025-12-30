@@ -34,7 +34,8 @@ export function useAuth() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
         if (session?.user) {
           await checkUserRole(session.user, session);
         } else {
@@ -56,40 +57,58 @@ export function useAuth() {
   async function checkUserRole(user: User, session: Session) {
     setState(prev => ({ ...prev, loading: true }));
 
-    // Check if user is a Game Master
-    const { data: gmData } = await supabase
-      .from('game_masters')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
+    try {
+      // Use RPC function to check GM status (bypasses RLS circular dependency)
+      const { data: isGM, error: rpcError } = await supabase
+        .rpc('is_game_master', { user_uuid: user.id });
 
-    if (gmData) {
+      console.log('GM check result:', { isGM, rpcError });
+
+      if (isGM) {
+        // Now fetch GM data (should work since we're a GM)
+        const { data: gmData } = await supabase
+          .from('game_masters')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        setState({
+          session,
+          user,
+          isGameMaster: true,
+          gameMaster: gmData,
+          player: null,
+          loading: false,
+        });
+        return;
+      }
+
+      // Check if user is a Player
+      const { data: playerData } = await supabase
+        .from('players')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
       setState({
         session,
         user,
-        isGameMaster: true,
-        gameMaster: gmData,
+        isGameMaster: false,
+        gameMaster: null,
+        player: playerData,
+        loading: false,
+      });
+    } catch (error) {
+      console.error('Error checking user role:', error);
+      setState({
+        session,
+        user,
+        isGameMaster: false,
+        gameMaster: null,
         player: null,
         loading: false,
       });
-      return;
     }
-
-    // Check if user is a Player
-    const { data: playerData } = await supabase
-      .from('players')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    setState({
-      session,
-      user,
-      isGameMaster: false,
-      gameMaster: null,
-      player: playerData,
-      loading: false,
-    });
   }
 
   async function signIn(email: string, password: string) {

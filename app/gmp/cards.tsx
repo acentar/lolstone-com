@@ -1,104 +1,32 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  TextInput,
-  Modal,
-  RefreshControl,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { 
+  Text, Card, Button, TextInput, Modal, Portal, 
+  Chip, FAB, Searchbar, SegmentedButtons, IconButton,
+} from 'react-native-paper';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { CardDesign, CardRarity, CardType } from '../../src/types/database';
-import { colors, typography, spacing, borderRadius, shadows } from '../../src/constants/theme';
+import { adminColors, adminSpacing, adminRadius } from '../../src/constants/adminTheme';
 
 const RARITIES: CardRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const CARD_TYPES: CardType[] = ['meme_minion', 'viral_spell', 'troll_legendary', 'reaction_trap', 'copypasta_enchantment'];
 
 const RARITY_COLORS: Record<CardRarity, string> = {
-  common: colors.common,
-  uncommon: colors.uncommon,
-  rare: colors.rare,
-  epic: colors.epic,
-  legendary: colors.legendary,
+  common: adminColors.common,
+  uncommon: adminColors.uncommon,
+  rare: adminColors.rare,
+  epic: adminColors.epic,
+  legendary: adminColors.legendary,
 };
 
-const TYPE_EMOJIS: Record<CardType, string> = {
-  meme_minion: '😂',
-  viral_spell: '🌐',
-  troll_legendary: '🧌',
-  reaction_trap: '😱',
-  copypasta_enchantment: '📜',
+const TYPE_LABELS: Record<CardType, string> = {
+  meme_minion: 'Meme Minion',
+  viral_spell: 'Viral Spell',
+  troll_legendary: 'Troll Legendary',
+  reaction_trap: 'Reaction Trap',
+  copypasta_enchantment: 'Copypasta',
 };
-
-function CardPreview({ card }: { card: Partial<CardDesign> }) {
-  const rarityColor = RARITY_COLORS[card.rarity || 'common'];
-  
-  return (
-    <View style={[styles.cardPreview, { borderColor: rarityColor }]}>
-      {/* Card Header */}
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardName} numberOfLines={1}>
-          {card.name || 'Card Name'}
-        </Text>
-        <View style={[styles.manaCost, { backgroundColor: colors.rare }]}>
-          <Text style={styles.manaText}>{card.mana_cost ?? 0}</Text>
-        </View>
-      </View>
-
-      {/* Card Art Area */}
-      <View style={styles.cardArtArea}>
-        <Text style={styles.cardArtPlaceholder}>
-          {TYPE_EMOJIS[card.card_type || 'meme_minion']}
-        </Text>
-      </View>
-
-      {/* Card Type */}
-      <View style={styles.cardTypeBar}>
-        <Text style={styles.cardTypeText}>
-          {(card.card_type || 'meme_minion').replace('_', ' ').toUpperCase()}
-        </Text>
-      </View>
-
-      {/* Card Text */}
-      <View style={styles.cardTextArea}>
-        <Text style={styles.abilityText} numberOfLines={2}>
-          {card.ability_text || 'Ability text goes here...'}
-        </Text>
-        <Text style={styles.flavorText} numberOfLines={1}>
-          {card.flavor_text || '"Flavor text"'}
-        </Text>
-      </View>
-
-      {/* Stats */}
-      {card.card_type === 'meme_minion' || card.card_type === 'troll_legendary' ? (
-        <View style={styles.statsRow}>
-          <View style={[styles.statBadge, styles.attackBadge]}>
-            <Text style={styles.statText}>{card.attack ?? 0}</Text>
-          </View>
-          <View style={styles.rarityBadge}>
-            <Text style={[styles.rarityText, { color: rarityColor }]}>
-              {(card.rarity || 'common').toUpperCase()}
-            </Text>
-          </View>
-          <View style={[styles.statBadge, styles.healthBadge]}>
-            <Text style={styles.statText}>{card.health ?? 0}</Text>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.statsRow}>
-          <View style={styles.rarityBadge}>
-            <Text style={[styles.rarityText, { color: rarityColor }]}>
-              {(card.rarity || 'common').toUpperCase()}
-            </Text>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
 
 export default function CardDesignerScreen() {
   const { gameMaster } = useAuthContext();
@@ -106,6 +34,8 @@ export default function CardDesignerScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterRarity, setFilterRarity] = useState<string>('all');
   
   // Form state
   const [formData, setFormData] = useState<Partial<CardDesign>>({
@@ -158,18 +88,7 @@ export default function CardDesignerScreen() {
       if (error) throw error;
 
       setModalVisible(false);
-      setFormData({
-        name: '',
-        description: '',
-        ability_text: '',
-        flavor_text: '',
-        mana_cost: 1,
-        attack: 1,
-        health: 1,
-        rarity: 'common',
-        card_type: 'meme_minion',
-        max_supply: null,
-      });
+      resetForm();
       fetchCards();
     } catch (error) {
       console.error('Error saving card:', error);
@@ -177,6 +96,27 @@ export default function CardDesignerScreen() {
       setSaving(false);
     }
   };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      description: '',
+      ability_text: '',
+      flavor_text: '',
+      mana_cost: 1,
+      attack: 1,
+      health: 1,
+      rarity: 'common',
+      card_type: 'meme_minion',
+      max_supply: null,
+    });
+  };
+
+  const filteredCards = cards.filter(card => {
+    const matchesSearch = card.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRarity = filterRarity === 'all' || card.rarity === filterRarity;
+    return matchesSearch && matchesRarity;
+  });
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -189,11 +129,7 @@ export default function CardDesignerScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={adminColors.primary} />
         }
       >
         {/* Header */}
@@ -202,196 +138,214 @@ export default function CardDesignerScreen() {
             <Text style={styles.title}>Card Designer</Text>
             <Text style={styles.subtitle}>{cards.length} designs created</Text>
           </View>
-          <Pressable style={styles.createButton} onPress={() => setModalVisible(true)}>
-            <Text style={styles.createButtonText}>+ New Card</Text>
-          </Pressable>
         </View>
 
+        {/* Search & Filters */}
+        <View style={styles.filtersRow}>
+          <Searchbar
+            placeholder="Search cards..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchbar}
+            inputStyle={styles.searchInput}
+          />
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+          <Chip
+            selected={filterRarity === 'all'}
+            onPress={() => setFilterRarity('all')}
+            style={styles.chip}
+          >
+            All
+          </Chip>
+          {RARITIES.map(rarity => (
+            <Chip
+              key={rarity}
+              selected={filterRarity === rarity}
+              onPress={() => setFilterRarity(rarity)}
+              style={[styles.chip, { borderColor: RARITY_COLORS[rarity] }]}
+              selectedColor={RARITY_COLORS[rarity]}
+            >
+              {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
+            </Chip>
+          ))}
+        </ScrollView>
+
         {/* Cards Grid */}
-        {cards.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>🎨</Text>
-            <Text style={styles.emptyTitle}>No Cards Yet</Text>
-            <Text style={styles.emptyText}>
-              Create your first meme card design!
-            </Text>
-          </View>
+        {filteredCards.length === 0 ? (
+          <Card style={styles.emptyCard} mode="outlined">
+            <Card.Content style={styles.emptyContent}>
+              <Text style={styles.emptyIcon}>🎨</Text>
+              <Text style={styles.emptyTitle}>
+                {searchQuery ? 'No cards found' : 'No Cards Yet'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'Try a different search' : 'Create your first meme card design!'}
+              </Text>
+              {!searchQuery && (
+                <Button mode="contained" onPress={() => setModalVisible(true)} style={styles.emptyButton}>
+                  Create First Card
+                </Button>
+              )}
+            </Card.Content>
+          </Card>
         ) : (
           <View style={styles.cardsGrid}>
-            {cards.map((card) => (
-              <Pressable key={card.id} style={styles.cardWrapper}>
-                <CardPreview card={card} />
-                <Text style={styles.cardMintCount}>
-                  {card.total_minted} minted
-                  {card.max_supply ? ` / ${card.max_supply}` : ''}
-                </Text>
-              </Pressable>
+            {filteredCards.map((card) => (
+              <Card key={card.id} style={styles.cardItem} mode="elevated">
+                <View style={[styles.cardRarityBar, { backgroundColor: RARITY_COLORS[card.rarity] }]} />
+                <Card.Content style={styles.cardContent}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardName} numberOfLines={1}>{card.name}</Text>
+                    <View style={styles.manaBadge}>
+                      <Text style={styles.manaText}>{card.mana_cost}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.cardType}>{TYPE_LABELS[card.card_type]}</Text>
+                  {card.ability_text && (
+                    <Text style={styles.cardAbility} numberOfLines={2}>{card.ability_text}</Text>
+                  )}
+                  <View style={styles.cardFooter}>
+                    {(card.card_type === 'meme_minion' || card.card_type === 'troll_legendary') && (
+                      <Text style={styles.cardStats}>⚔️ {card.attack}  ❤️ {card.health}</Text>
+                    )}
+                    <Text style={styles.cardMinted}>{card.total_minted} minted</Text>
+                  </View>
+                </Card.Content>
+              </Card>
             ))}
           </View>
         )}
       </ScrollView>
 
+      {/* FAB */}
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        onPress={() => setModalVisible(true)}
+        color={adminColors.onPrimary}
+      />
+
       {/* Create Card Modal */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Design New Card</Text>
-                <Pressable onPress={() => setModalVisible(false)}>
-                  <Text style={styles.closeButton}>✕</Text>
-                </Pressable>
-              </View>
+      <Portal>
+        <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)} contentContainerStyle={styles.modal}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Card Design</Text>
+              <IconButton icon="close" onPress={() => setModalVisible(false)} />
+            </View>
 
-              {/* Live Preview */}
-              <View style={styles.previewSection}>
-                <CardPreview card={formData} />
-              </View>
+            <TextInput
+              label="Card Name"
+              value={formData.name}
+              onChangeText={(text) => setFormData({ ...formData, name: text })}
+              mode="outlined"
+              style={styles.input}
+            />
 
-              {/* Form */}
-              <View style={styles.formSection}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>CARD NAME</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.name}
-                    onChangeText={(text) => setFormData({ ...formData, name: text })}
-                    placeholder="e.g., Doge of Wall Street"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
+            <View style={styles.statsRow}>
+              <TextInput
+                label="Mana"
+                value={String(formData.mana_cost || 0)}
+                onChangeText={(text) => setFormData({ ...formData, mana_cost: parseInt(text) || 0 })}
+                mode="outlined"
+                keyboardType="numeric"
+                style={[styles.input, styles.smallInput]}
+              />
+              <TextInput
+                label="Attack"
+                value={String(formData.attack || 0)}
+                onChangeText={(text) => setFormData({ ...formData, attack: parseInt(text) || 0 })}
+                mode="outlined"
+                keyboardType="numeric"
+                style={[styles.input, styles.smallInput]}
+              />
+              <TextInput
+                label="Health"
+                value={String(formData.health || 0)}
+                onChangeText={(text) => setFormData({ ...formData, health: parseInt(text) || 0 })}
+                mode="outlined"
+                keyboardType="numeric"
+                style={[styles.input, styles.smallInput]}
+              />
+            </View>
 
-                <View style={styles.inputRow}>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>MANA</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(formData.mana_cost || 0)}
-                      onChangeText={(text) => setFormData({ ...formData, mana_cost: parseInt(text) || 0 })}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>ATTACK</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(formData.attack || 0)}
-                      onChangeText={(text) => setFormData({ ...formData, attack: parseInt(text) || 0 })}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>HEALTH</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(formData.health || 0)}
-                      onChangeText={(text) => setFormData({ ...formData, health: parseInt(text) || 0 })}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>RARITY</Text>
-                  <View style={styles.optionsRow}>
-                    {RARITIES.map((r) => (
-                      <Pressable
-                        key={r}
-                        style={[
-                          styles.optionButton,
-                          formData.rarity === r && { borderColor: RARITY_COLORS[r], backgroundColor: `${RARITY_COLORS[r]}20` },
-                        ]}
-                        onPress={() => setFormData({ ...formData, rarity: r })}
-                      >
-                        <Text style={[styles.optionText, { color: RARITY_COLORS[r] }]}>
-                          {r.charAt(0).toUpperCase()}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>CARD TYPE</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.optionsRow}>
-                      {CARD_TYPES.map((t) => (
-                        <Pressable
-                          key={t}
-                          style={[
-                            styles.typeButton,
-                            formData.card_type === t && styles.typeButtonActive,
-                          ]}
-                          onPress={() => setFormData({ ...formData, card_type: t })}
-                        >
-                          <Text style={styles.typeEmoji}>{TYPE_EMOJIS[t]}</Text>
-                          <Text style={[
-                            styles.typeText,
-                            formData.card_type === t && styles.typeTextActive,
-                          ]}>
-                            {t.replace('_', ' ')}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>ABILITY TEXT</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={formData.ability_text || ''}
-                    onChangeText={(text) => setFormData({ ...formData, ability_text: text })}
-                    placeholder="What does this card do?"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={3}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>FLAVOR TEXT</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.flavor_text || ''}
-                    onChangeText={(text) => setFormData({ ...formData, flavor_text: text })}
-                    placeholder="Witty quote or meme reference"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>MAX SUPPLY (optional)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.max_supply ? String(formData.max_supply) : ''}
-                    onChangeText={(text) => setFormData({ ...formData, max_supply: text ? parseInt(text) : null })}
-                    placeholder="Leave empty for unlimited"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                <Pressable
-                  style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-                  onPress={handleSaveCard}
-                  disabled={saving || !formData.name}
+            <Text style={styles.inputLabel}>Rarity</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsScroll}>
+              {RARITIES.map((rarity) => (
+                <Chip
+                  key={rarity}
+                  selected={formData.rarity === rarity}
+                  onPress={() => setFormData({ ...formData, rarity })}
+                  style={[styles.optionChip, { borderColor: RARITY_COLORS[rarity] }]}
+                  selectedColor={RARITY_COLORS[rarity]}
                 >
-                  <Text style={styles.saveButtonText}>
-                    {saving ? 'Saving...' : 'Create Card Design'}
-                  </Text>
-                </Pressable>
-              </View>
+                  {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
+                </Chip>
+              ))}
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+
+            <Text style={styles.inputLabel}>Card Type</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsScroll}>
+              {CARD_TYPES.map((type) => (
+                <Chip
+                  key={type}
+                  selected={formData.card_type === type}
+                  onPress={() => setFormData({ ...formData, card_type: type })}
+                  style={styles.optionChip}
+                >
+                  {TYPE_LABELS[type]}
+                </Chip>
+              ))}
+            </ScrollView>
+
+            <TextInput
+              label="Ability Text"
+              value={formData.ability_text || ''}
+              onChangeText={(text) => setFormData({ ...formData, ability_text: text })}
+              mode="outlined"
+              multiline
+              numberOfLines={3}
+              style={styles.input}
+            />
+
+            <TextInput
+              label="Flavor Text"
+              value={formData.flavor_text || ''}
+              onChangeText={(text) => setFormData({ ...formData, flavor_text: text })}
+              mode="outlined"
+              style={styles.input}
+              placeholder="Witty quote or meme reference"
+            />
+
+            <TextInput
+              label="Max Supply (optional)"
+              value={formData.max_supply ? String(formData.max_supply) : ''}
+              onChangeText={(text) => setFormData({ ...formData, max_supply: text ? parseInt(text) : null })}
+              mode="outlined"
+              keyboardType="numeric"
+              style={styles.input}
+              placeholder="Leave empty for unlimited"
+            />
+
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setModalVisible(false)} style={styles.cancelButton}>
+                Cancel
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handleSaveCard} 
+                loading={saving}
+                disabled={!formData.name || saving}
+                style={styles.saveButton}
+              >
+                Create Card
+              </Button>
+            </View>
+          </ScrollView>
+        </Modal>
+      </Portal>
     </View>
   );
 }
@@ -399,306 +353,215 @@ export default function CardDesignerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: adminColors.background,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
+    padding: adminSpacing.lg,
+    paddingBottom: 100,
   },
 
   // Header
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: adminSpacing.lg,
   },
   title: {
-    ...typography.h2,
-    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '700',
+    color: adminColors.textPrimary,
   },
   subtitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    marginTop: 4,
   },
-  createButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+
+  // Filters
+  filtersRow: {
+    marginBottom: adminSpacing.sm,
   },
-  createButtonText: {
-    ...typography.label,
-    color: colors.background,
+  searchbar: {
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.md,
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: adminColors.border,
+  },
+  searchInput: {
+    fontSize: 14,
+  },
+  chipRow: {
+    marginBottom: adminSpacing.lg,
+  },
+  chip: {
+    marginRight: adminSpacing.sm,
   },
 
   // Empty State
-  emptyState: {
-    alignItems: 'center',
-    padding: spacing.xxl,
+  emptyCard: {
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    borderColor: adminColors.border,
   },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.md,
+  emptyContent: {
+    alignItems: 'center',
+    padding: adminSpacing.xl,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: adminSpacing.md,
   },
   emptyTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
+    fontSize: 18,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.xs,
   },
   emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    textAlign: 'center',
+    marginBottom: adminSpacing.lg,
+  },
+  emptyButton: {
+    borderRadius: adminRadius.md,
   },
 
   // Cards Grid
   cardsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    gap: adminSpacing.md,
   },
-  cardWrapper: {
-    alignItems: 'center',
-  },
-  cardMintCount: {
-    ...typography.label,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-    fontSize: 9,
-  },
-
-  // Card Preview
-  cardPreview: {
-    width: 160,
-    height: 220,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
+  cardItem: {
+    flex: 1,
+    minWidth: 200,
+    maxWidth: 300,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
     overflow: 'hidden',
-    ...shadows.md,
+  },
+  cardRarityBar: {
+    height: 4,
+  },
+  cardContent: {
+    padding: adminSpacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.sm,
-    backgroundColor: colors.backgroundTertiary,
+    marginBottom: adminSpacing.xs,
   },
   cardName: {
-    ...typography.cardName,
-    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
     flex: 1,
-    marginRight: spacing.sm,
   },
-  manaCost: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  manaBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: adminColors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   manaText: {
-    ...typography.cardStat,
-    color: colors.textPrimary,
+    color: '#fff',
+    fontWeight: '700',
     fontSize: 14,
   },
-  cardArtArea: {
-    height: 70,
-    backgroundColor: colors.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardType: {
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    marginBottom: adminSpacing.sm,
   },
-  cardArtPlaceholder: {
-    fontSize: 40,
+  cardAbility: {
+    fontSize: 13,
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.sm,
+    lineHeight: 18,
   },
-  cardTypeBar: {
-    backgroundColor: colors.backgroundTertiary,
-    paddingVertical: 2,
-    paddingHorizontal: spacing.sm,
-  },
-  cardTypeText: {
-    ...typography.label,
-    color: colors.textMuted,
-    fontSize: 7,
-    textAlign: 'center',
-  },
-  cardTextArea: {
-    flex: 1,
-    padding: spacing.sm,
-  },
-  abilityText: {
-    ...typography.bodySmall,
-    color: colors.textPrimary,
-    fontSize: 9,
-    lineHeight: 12,
-  },
-  flavorText: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    fontSize: 8,
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  statsRow: {
+  cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingTop: adminSpacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: adminColors.borderLight,
   },
-  statBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardStats: {
+    fontSize: 13,
+    color: adminColors.textSecondary,
   },
-  attackBadge: {
-    backgroundColor: colors.secondary,
+  cardMinted: {
+    fontSize: 12,
+    color: adminColors.textMuted,
   },
-  healthBadge: {
-    backgroundColor: colors.success,
-  },
-  statText: {
-    ...typography.cardStat,
-    color: colors.textPrimary,
-    fontSize: 14,
-  },
-  rarityBadge: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  rarityText: {
-    ...typography.label,
-    fontSize: 8,
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    right: adminSpacing.lg,
+    bottom: adminSpacing.lg,
+    backgroundColor: adminColors.primary,
   },
 
   // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+  modal: {
+    backgroundColor: adminColors.surface,
+    margin: adminSpacing.lg,
+    padding: adminSpacing.lg,
+    borderRadius: adminRadius.lg,
     maxHeight: '90%',
-    padding: spacing.lg,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: adminSpacing.lg,
   },
   modalTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: colors.textMuted,
-    padding: spacing.sm,
-  },
-
-  // Preview Section
-  previewSection: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    padding: spacing.md,
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.lg,
-  },
-
-  // Form
-  formSection: {
-    gap: spacing.md,
-  },
-  inputGroup: {
-    marginBottom: spacing.md,
-  },
-  inputLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 20,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    color: colors.textPrimary,
-    ...typography.body,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: adminSpacing.md,
+    backgroundColor: adminColors.surface,
   },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  inputRow: {
+  statsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: adminSpacing.sm,
   },
-  optionsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  smallInput: {
+    flex: 1,
   },
-  optionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optionText: {
-    ...typography.label,
+  inputLabel: {
     fontSize: 14,
+    fontWeight: '500',
+    color: adminColors.textSecondary,
+    marginBottom: adminSpacing.sm,
   },
-  typeButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    marginRight: spacing.sm,
+  optionsScroll: {
+    marginBottom: adminSpacing.md,
   },
-  typeButtonActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryGlow,
+  optionChip: {
+    marginRight: adminSpacing.sm,
   },
-  typeEmoji: {
-    fontSize: 20,
-    marginBottom: 2,
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: adminSpacing.sm,
+    marginTop: adminSpacing.md,
   },
-  typeText: {
-    ...typography.label,
-    color: colors.textMuted,
-    fontSize: 8,
+  cancelButton: {
+    borderRadius: adminRadius.md,
   },
-  typeTextActive: {
-    color: colors.primary,
-  },
-
-  // Save Button
   saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    ...typography.label,
-    color: colors.background,
+    borderRadius: adminRadius.md,
   },
 });
-

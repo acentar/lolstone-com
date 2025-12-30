@@ -1,18 +1,12 @@
 import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  TextInput,
-  Modal,
-  RefreshControl,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { 
+  Text, Card, Button, TextInput, Searchbar, Avatar, 
+  Chip, Modal, Portal, Divider, IconButton, DataTable,
+} from 'react-native-paper';
 import { supabase } from '../../src/lib/supabase';
 import { Player } from '../../src/types/database';
-import { colors, typography, spacing, borderRadius, shadows } from '../../src/constants/theme';
+import { adminColors, adminSpacing, adminRadius } from '../../src/constants/adminTheme';
 
 export default function PlayersScreen() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -21,8 +15,6 @@ export default function PlayersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-
-  // Grant ducats form
   const [grantAmount, setGrantAmount] = useState('100');
   const [granting, setGranting] = useState(false);
 
@@ -65,7 +57,6 @@ export default function PlayersScreen() {
     setGranting(true);
 
     try {
-      // Update player ducats
       const { error: updateError } = await supabase
         .from('players')
         .update({ ducats: selectedPlayer.ducats + amount })
@@ -73,7 +64,6 @@ export default function PlayersScreen() {
 
       if (updateError) throw updateError;
 
-      // Log transaction
       await supabase.from('transactions').insert({
         type: 'grant_ducats',
         to_player_id: selectedPlayer.id,
@@ -82,7 +72,7 @@ export default function PlayersScreen() {
       });
 
       Alert.alert(
-        '💰 Ducats Granted!',
+        'Ducats Granted!',
         `${amount} ducats sent to @${selectedPlayer.username}\n\nNew balance: ${selectedPlayer.ducats + amount} ducats`
       );
 
@@ -108,194 +98,200 @@ export default function PlayersScreen() {
     setModalVisible(true);
   };
 
+  const totalDucats = players.reduce((sum, p) => sum + p.ducats, 0);
+  const avgBalance = players.length > 0 ? Math.round(totalDucats / players.length) : 0;
+
   return (
     <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={adminColors.primary} />
         }
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>👥 Players</Text>
-            <Text style={styles.subtitle}>{players.length} registered</Text>
-          </View>
+          <Text style={styles.title}>Players</Text>
+          <Text style={styles.subtitle}>{players.length} registered players</Text>
+        </View>
+
+        {/* Stats Cards */}
+        <View style={styles.statsRow}>
+          <Card style={styles.statCard} mode="elevated">
+            <Card.Content style={styles.statContent}>
+              <Text style={styles.statValue}>{players.length}</Text>
+              <Text style={styles.statLabel}>Total Players</Text>
+            </Card.Content>
+          </Card>
+          <Card style={styles.statCard} mode="elevated">
+            <Card.Content style={styles.statContent}>
+              <Text style={styles.statValue}>{totalDucats.toLocaleString()}</Text>
+              <Text style={styles.statLabel}>Total Ducats</Text>
+            </Card.Content>
+          </Card>
+          <Card style={styles.statCard} mode="elevated">
+            <Card.Content style={styles.statContent}>
+              <Text style={styles.statValue}>{avgBalance.toLocaleString()}</Text>
+              <Text style={styles.statLabel}>Avg Balance</Text>
+            </Card.Content>
+          </Card>
         </View>
 
         {/* Search */}
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search by name or @username..."
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
-
-        {/* Stats Summary */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{players.length}</Text>
-            <Text style={styles.statLabel}>Total Players</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>
-              {players.reduce((sum, p) => sum + p.ducats, 0).toLocaleString()}
-            </Text>
-            <Text style={styles.statLabel}>Total Ducats</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>
-              {players.length > 0
-                ? Math.round(players.reduce((sum, p) => sum + p.ducats, 0) / players.length)
-                : 0}
-            </Text>
-            <Text style={styles.statLabel}>Avg Balance</Text>
-          </View>
-        </View>
+        <Searchbar
+          placeholder="Search by name or username..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchbar}
+        />
 
         {/* Players List */}
         {filteredPlayers.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>👻</Text>
-            <Text style={styles.emptyTitle}>
-              {searchQuery ? 'No players found' : 'No Players Yet'}
-            </Text>
-            <Text style={styles.emptyText}>
-              {searchQuery
-                ? 'Try a different search term'
-                : 'Players will appear here when they sign up'}
-            </Text>
-          </View>
+          <Card style={styles.emptyCard} mode="outlined">
+            <Card.Content style={styles.emptyContent}>
+              <Text style={styles.emptyIcon}>👻</Text>
+              <Text style={styles.emptyTitle}>
+                {searchQuery ? 'No players found' : 'No Players Yet'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'Try a different search' : 'Players will appear here when they sign up'}
+              </Text>
+            </Card.Content>
+          </Card>
         ) : (
-          <View style={styles.playersList}>
-            {filteredPlayers.map((player) => (
-              <Pressable
-                key={player.id}
-                style={styles.playerCard}
-                onPress={() => openPlayerModal(player)}
-              >
-                <View style={styles.playerAvatar}>
-                  <Text style={styles.playerAvatarText}>
-                    {player.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.playerInfo}>
-                  <Text style={styles.playerName}>{player.name}</Text>
-                  <Text style={styles.playerUsername}>@{player.username}</Text>
-                </View>
-                <View style={styles.playerBalance}>
-                  <Text style={styles.balanceValue}>{player.ducats.toLocaleString()}</Text>
-                  <Text style={styles.balanceLabel}>ducats</Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
+          <Card style={styles.tableCard} mode="outlined">
+            <DataTable>
+              <DataTable.Header>
+                <DataTable.Title>Player</DataTable.Title>
+                <DataTable.Title>Username</DataTable.Title>
+                <DataTable.Title numeric>Balance</DataTable.Title>
+                <DataTable.Title numeric>Actions</DataTable.Title>
+              </DataTable.Header>
+
+              {filteredPlayers.map((player) => (
+                <DataTable.Row key={player.id}>
+                  <DataTable.Cell>
+                    <View style={styles.playerCell}>
+                      <Avatar.Text 
+                        size={32} 
+                        label={player.name.charAt(0)} 
+                        style={styles.avatar}
+                      />
+                      <Text style={styles.playerName}>{player.name}</Text>
+                    </View>
+                  </DataTable.Cell>
+                  <DataTable.Cell>
+                    <Text style={styles.username}>@{player.username}</Text>
+                  </DataTable.Cell>
+                  <DataTable.Cell numeric>
+                    <Chip compact style={styles.balanceChip}>
+                      💰 {player.ducats.toLocaleString()}
+                    </Chip>
+                  </DataTable.Cell>
+                  <DataTable.Cell numeric>
+                    <Button 
+                      mode="text" 
+                      compact 
+                      onPress={() => openPlayerModal(player)}
+                    >
+                      Manage
+                    </Button>
+                  </DataTable.Cell>
+                </DataTable.Row>
+              ))}
+            </DataTable>
+          </Card>
         )}
       </ScrollView>
 
-      {/* Player Detail Modal */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedPlayer && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Pressable onPress={() => setModalVisible(false)}>
-                    <Text style={styles.closeButton}>✕</Text>
-                  </Pressable>
-                </View>
+      {/* Player Modal */}
+      <Portal>
+        <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)} contentContainerStyle={styles.modal}>
+          {selectedPlayer && (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Player Details</Text>
+                <IconButton icon="close" onPress={() => setModalVisible(false)} />
+              </View>
 
-                {/* Player Profile */}
-                <View style={styles.profileSection}>
-                  <View style={styles.profileAvatar}>
-                    <Text style={styles.profileAvatarText}>
-                      {selectedPlayer.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.profileName}>{selectedPlayer.name}</Text>
-                  <Text style={styles.profileUsername}>@{selectedPlayer.username}</Text>
-                </View>
+              {/* Profile */}
+              <View style={styles.profileSection}>
+                <Avatar.Text 
+                  size={64} 
+                  label={selectedPlayer.name.charAt(0)} 
+                  style={styles.profileAvatar}
+                />
+                <Text style={styles.profileName}>{selectedPlayer.name}</Text>
+                <Text style={styles.profileUsername}>@{selectedPlayer.username}</Text>
+              </View>
 
-                {/* Stats */}
-                <View style={styles.profileStats}>
-                  <View style={styles.profileStat}>
-                    <Text style={styles.profileStatValue}>
-                      💰 {selectedPlayer.ducats.toLocaleString()}
-                    </Text>
+              {/* Stats */}
+              <View style={styles.profileStats}>
+                <Card style={styles.profileStatCard} mode="outlined">
+                  <Card.Content style={styles.profileStatContent}>
+                    <Text style={styles.profileStatValue}>💰 {selectedPlayer.ducats.toLocaleString()}</Text>
                     <Text style={styles.profileStatLabel}>Ducats</Text>
-                  </View>
-                  <View style={styles.profileStat}>
+                  </Card.Content>
+                </Card>
+                <Card style={styles.profileStatCard} mode="outlined">
+                  <Card.Content style={styles.profileStatContent}>
                     <Text style={styles.profileStatValue}>🃏 0</Text>
                     <Text style={styles.profileStatLabel}>Cards</Text>
-                  </View>
-                </View>
+                  </Card.Content>
+                </Card>
+              </View>
 
-                {/* Grant Ducats Section */}
-                <View style={styles.grantSection}>
-                  <Text style={styles.grantTitle}>Grant Ducats</Text>
-                  <View style={styles.grantForm}>
-                    <TextInput
-                      style={styles.grantInput}
-                      value={grantAmount}
-                      onChangeText={setGrantAmount}
-                      keyboardType="numeric"
-                      placeholder="Amount"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                    <Pressable
-                      style={[styles.grantButton, granting && styles.grantButtonDisabled]}
-                      onPress={handleGrantDucats}
-                      disabled={granting}
-                    >
-                      <Text style={styles.grantButtonText}>
-                        {granting ? '...' : '💰 Grant'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.quickGrants}>
-                    {['100', '500', '1000', '5000'].map((amt) => (
-                      <Pressable
-                        key={amt}
-                        style={styles.quickGrantButton}
-                        onPress={() => setGrantAmount(amt)}
-                      >
-                        <Text style={styles.quickGrantText}>{amt}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
+              <Divider style={styles.divider} />
 
-                {/* Actions */}
-                <View style={styles.actionsSection}>
-                  <Pressable style={styles.actionButton}>
-                    <Text style={styles.actionButtonText}>📦 View Inventory</Text>
-                  </Pressable>
-                  <Pressable style={styles.actionButton}>
-                    <Text style={styles.actionButtonText}>📜 Transaction History</Text>
-                  </Pressable>
-                  <Pressable style={[styles.actionButton, styles.actionButtonDanger]}>
-                    <Text style={styles.actionButtonTextDanger}>🚫 Ban Player</Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+              {/* Grant Ducats */}
+              <Text style={styles.sectionLabel}>Grant Ducats</Text>
+              <View style={styles.grantRow}>
+                <TextInput
+                  value={grantAmount}
+                  onChangeText={setGrantAmount}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={styles.grantInput}
+                  placeholder="Amount"
+                />
+                <Button 
+                  mode="contained" 
+                  onPress={handleGrantDucats}
+                  loading={granting}
+                  disabled={granting}
+                  style={styles.grantButton}
+                >
+                  Grant
+                </Button>
+              </View>
+
+              <View style={styles.quickGrants}>
+                {['100', '500', '1000', '5000'].map((amt) => (
+                  <Chip
+                    key={amt}
+                    onPress={() => setGrantAmount(amt)}
+                    selected={grantAmount === amt}
+                    style={styles.quickChip}
+                  >
+                    {amt}
+                  </Chip>
+                ))}
+              </View>
+
+              <Divider style={styles.divider} />
+
+              {/* Actions */}
+              <Button mode="outlined" style={styles.actionButton} icon="eye">
+                View Inventory
+              </Button>
+              <Button mode="outlined" style={styles.actionButton} icon="history">
+                Transaction History
+              </Button>
+            </ScrollView>
+          )}
+        </Modal>
+      </Portal>
     </View>
   );
 }
@@ -303,301 +299,213 @@ export default function PlayersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: adminColors.background,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
+    padding: adminSpacing.lg,
   },
 
   // Header
   header: {
-    marginBottom: spacing.lg,
+    marginBottom: adminSpacing.lg,
   },
   title: {
-    ...typography.h2,
-    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '700',
+    color: adminColors.textPrimary,
   },
   subtitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-
-  // Search
-  searchContainer: {
-    marginBottom: spacing.lg,
-  },
-  searchInput: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    color: colors.textPrimary,
-    ...typography.body,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-
-  // Stats Row
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statValue: {
-    ...typography.h3,
-    color: colors.primary,
-  },
-  statLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-    fontSize: 9,
+    fontSize: 14,
+    color: adminColors.textSecondary,
     marginTop: 4,
   },
 
-  // Empty State
-  emptyState: {
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    gap: adminSpacing.md,
+    marginBottom: adminSpacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+  },
+  statContent: {
     alignItems: 'center',
-    padding: spacing.xxl,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: adminSpacing.md,
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: spacing.md,
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: adminColors.accent,
   },
-  emptyTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
+  statLabel: {
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    marginTop: 4,
   },
 
-  // Players List
-  playersList: {
-    gap: spacing.sm,
+  // Search
+  searchbar: {
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.md,
+    marginBottom: adminSpacing.lg,
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: adminColors.border,
   },
-  playerCard: {
+
+  // Empty State
+  emptyCard: {
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    borderColor: adminColors.border,
+  },
+  emptyContent: {
+    alignItems: 'center',
+    padding: adminSpacing.xl,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: adminSpacing.md,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    textAlign: 'center',
+    marginTop: adminSpacing.xs,
+  },
+
+  // Table
+  tableCard: {
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    borderColor: adminColors.border,
+    overflow: 'hidden',
+  },
+  playerCell: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  playerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playerAvatarText: {
-    ...typography.h3,
-    color: colors.background,
-  },
-  playerInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
+  avatar: {
+    backgroundColor: adminColors.accent,
+    marginRight: adminSpacing.sm,
   },
   playerName: {
-    ...typography.body,
-    color: colors.textPrimary,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
+    color: adminColors.textPrimary,
   },
-  playerUsername: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+  username: {
+    fontSize: 13,
+    color: adminColors.textSecondary,
   },
-  playerBalance: {
-    alignItems: 'flex-end',
-  },
-  balanceValue: {
-    ...typography.h3,
-    color: colors.legendary,
-    fontSize: 16,
-  },
-  balanceLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-    fontSize: 9,
+  balanceChip: {
+    backgroundColor: adminColors.warningLight,
   },
 
   // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.lg,
+  modal: {
+    backgroundColor: adminColors.surface,
+    margin: adminSpacing.lg,
+    padding: adminSpacing.lg,
+    borderRadius: adminRadius.lg,
     maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: spacing.md,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: adminSpacing.md,
   },
-  closeButton: {
-    fontSize: 24,
-    color: colors.textMuted,
-    padding: spacing.sm,
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
   },
 
-  // Profile Section
+  // Profile
   profileSection: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: adminSpacing.lg,
   },
   profileAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  profileAvatarText: {
-    ...typography.h1,
-    color: colors.background,
+    backgroundColor: adminColors.accent,
+    marginBottom: adminSpacing.md,
   },
   profileName: {
-    ...typography.h2,
-    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
   },
   profileUsername: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    marginTop: 4,
   },
-
-  // Profile Stats
   profileStats: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.xl,
+    gap: adminSpacing.md,
+    marginBottom: adminSpacing.md,
   },
-  profileStat: {
+  profileStatCard: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderColor: adminColors.border,
+  },
+  profileStatContent: {
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   profileStatValue: {
-    ...typography.h3,
-    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
   },
   profileStatLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    marginTop: 4,
   },
 
-  // Grant Section
-  grantSection: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.legendary,
+  divider: {
+    marginVertical: adminSpacing.lg,
   },
-  grantTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.sm,
   },
-  grantForm: {
+  grantRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: adminSpacing.sm,
   },
   grantInput: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    color: colors.textPrimary,
-    ...typography.body,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: adminColors.surface,
   },
   grantButton: {
-    backgroundColor: colors.legendary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  grantButtonDisabled: {
-    opacity: 0.6,
-  },
-  grantButtonText: {
-    ...typography.label,
-    color: colors.background,
+    borderRadius: adminRadius.md,
   },
   quickGrants: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
+    gap: adminSpacing.sm,
+    marginTop: adminSpacing.md,
   },
-  quickGrantButton: {
+  quickChip: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  quickGrantText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-
-  // Actions Section
-  actionsSection: {
-    gap: spacing.sm,
   },
   actionButton: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  actionButtonText: {
-    ...typography.body,
-    color: colors.textPrimary,
-  },
-  actionButtonDanger: {
-    borderColor: colors.error,
-  },
-  actionButtonTextDanger: {
-    ...typography.body,
-    color: colors.error,
+    marginBottom: adminSpacing.sm,
+    borderRadius: adminRadius.md,
   },
 });
-

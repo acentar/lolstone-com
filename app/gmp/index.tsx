@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { Text, Card, Button, ProgressBar } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
-import { colors, typography, spacing, borderRadius, shadows } from '../../src/constants/theme';
+import { adminColors, adminSpacing, adminRadius } from '../../src/constants/adminTheme';
 
 interface DashboardStats {
   totalCardDesigns: number;
@@ -12,22 +14,52 @@ interface DashboardStats {
   recentTransactions: number;
 }
 
-function StatCard({ emoji, label, value, color }: { 
-  emoji: string; 
-  label: string; 
-  value: number | string;
-  color?: string;
+function StatCard({ title, value, subtitle, icon, color, onPress }: {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: string;
+  color: string;
+  onPress?: () => void;
 }) {
   return (
-    <View style={[styles.statCard, color && { borderColor: color }]}>
-      <Text style={styles.statEmoji}>{emoji}</Text>
-      <Text style={[styles.statValue, color && { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    <Card style={styles.statCard} onPress={onPress} mode="elevated">
+      <Card.Content style={styles.statCardContent}>
+        <View style={[styles.statIcon, { backgroundColor: color + '15' }]}>
+          <Text style={{ fontSize: 24 }}>{icon}</Text>
+        </View>
+        <View style={styles.statInfo}>
+          <Text style={styles.statValue}>{value}</Text>
+          <Text style={styles.statTitle}>{title}</Text>
+          {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+        </View>
+      </Card.Content>
+    </Card>
+  );
+}
+
+function QuickAction({ icon, label, description, onPress }: {
+  icon: string;
+  label: string;
+  description: string;
+  onPress: () => void;
+}) {
+  return (
+    <Card style={styles.actionCard} onPress={onPress} mode="outlined">
+      <Card.Content style={styles.actionContent}>
+        <Text style={styles.actionIcon}>{icon}</Text>
+        <View style={styles.actionText}>
+          <Text style={styles.actionLabel}>{label}</Text>
+          <Text style={styles.actionDesc}>{description}</Text>
+        </View>
+        <Text style={styles.actionArrow}>→</Text>
+      </Card.Content>
+    </Card>
   );
 }
 
 export default function GMPDashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState<DashboardStats>({
     totalCardDesigns: 0,
     totalMintedCards: 0,
@@ -41,7 +73,6 @@ export default function GMPDashboard() {
 
   const fetchStats = async () => {
     try {
-      // Fetch all stats in parallel
       const [
         { count: designsCount },
         { count: instancesCount },
@@ -88,66 +119,67 @@ export default function GMPDashboard() {
   const formatNumber = (num: number): string => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
+    return num.toLocaleString();
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl 
-          refreshing={refreshing} 
+        <RefreshControl
+          refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.primary}
+          tintColor={adminColors.primary}
         />
       }
     >
-      {/* Welcome Section */}
-      <View style={styles.welcomeSection}>
-        <Text style={styles.welcomeTitle}>Control Center</Text>
-        <Text style={styles.welcomeSubtitle}>
-          Manage your chaotic card game empire
-        </Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>Welcome back 👋</Text>
+          <Text style={styles.title}>Dashboard</Text>
+        </View>
+        <View style={styles.headerActions}>
+          <Button 
+            mode="contained" 
+            onPress={() => router.push('/gmp/cards')}
+            style={styles.headerButton}
+          >
+            + New Card
+          </Button>
+        </View>
       </View>
 
       {/* Stats Grid */}
       <View style={styles.statsGrid}>
-        <StatCard 
-          emoji="🎨" 
-          label="Card Designs" 
+        <StatCard
+          icon="🎨"
+          title="Card Designs"
           value={formatNumber(stats.totalCardDesigns)}
-          color={colors.primary}
+          color={adminColors.accent}
+          onPress={() => router.push('/gmp/cards')}
         />
-        <StatCard 
-          emoji="🃏" 
-          label="Minted Cards" 
+        <StatCard
+          icon="🃏"
+          title="Minted Cards"
           value={formatNumber(stats.totalMintedCards)}
-          color={colors.secondary}
+          color={adminColors.epic}
+          onPress={() => router.push('/gmp/mint')}
         />
-        <StatCard 
-          emoji="👥" 
-          label="Players" 
+        <StatCard
+          icon="👥"
+          title="Players"
           value={formatNumber(stats.totalPlayers)}
-          color={colors.info}
+          color={adminColors.success}
+          onPress={() => router.push('/gmp/players')}
         />
-        <StatCard 
-          emoji="💰" 
-          label="Ducats Total" 
+        <StatCard
+          icon="💰"
+          title="Total Ducats"
           value={formatNumber(stats.totalDucatsCirculating)}
-          color={colors.legendary}
-        />
-        <StatCard 
-          emoji="🏪" 
-          label="Listed Cards" 
-          value={formatNumber(stats.listedCards)}
-          color={colors.rare}
-        />
-        <StatCard 
-          emoji="📜" 
-          label="Transactions" 
-          value={formatNumber(stats.recentTransactions)}
-          color={colors.epic}
+          color={adminColors.legendary}
+          onPress={() => router.push('/gmp/economy')}
         />
       </View>
 
@@ -155,42 +187,61 @@ export default function GMPDashboard() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsGrid}>
-          <Pressable style={[styles.actionCard, styles.actionDesign]}>
-            <Text style={styles.actionEmoji}>✨</Text>
-            <Text style={styles.actionText}>Design New Card</Text>
-          </Pressable>
-          <Pressable style={[styles.actionCard, styles.actionMint]}>
-            <Text style={styles.actionEmoji}>⚡</Text>
-            <Text style={styles.actionText}>Mint Cards</Text>
-          </Pressable>
-          <Pressable style={[styles.actionCard, styles.actionGrant]}>
-            <Text style={styles.actionEmoji}>💎</Text>
-            <Text style={styles.actionText}>Grant Ducats</Text>
-          </Pressable>
-          <Pressable style={[styles.actionCard, styles.actionPlayer]}>
-            <Text style={styles.actionEmoji}>👤</Text>
-            <Text style={styles.actionText}>Add Player</Text>
-          </Pressable>
+          <QuickAction
+            icon="✨"
+            label="Design New Card"
+            description="Create a new card template"
+            onPress={() => router.push('/gmp/cards')}
+          />
+          <QuickAction
+            icon="⚡"
+            label="Mint Cards"
+            description="Create card instances"
+            onPress={() => router.push('/gmp/mint')}
+          />
+          <QuickAction
+            icon="💎"
+            label="Grant Ducats"
+            description="Reward players with currency"
+            onPress={() => router.push('/gmp/players')}
+          />
+          <QuickAction
+            icon="📊"
+            label="View Economy"
+            description="Monitor marketplace & flow"
+            onPress={() => router.push('/gmp/economy')}
+          />
         </View>
       </View>
 
       {/* System Status */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>System Status</Text>
-        <View style={styles.statusCard}>
-          <View style={styles.statusRow}>
-            <View style={styles.statusIndicator} />
-            <Text style={styles.statusText}>Supabase Connected</Text>
-          </View>
-          <View style={styles.statusRow}>
-            <View style={styles.statusIndicator} />
-            <Text style={styles.statusText}>Game Master Authenticated</Text>
-          </View>
-          <View style={styles.statusRow}>
-            <View style={[styles.statusIndicator, styles.statusPending]} />
-            <Text style={styles.statusText}>Marketplace: Ready</Text>
-          </View>
-        </View>
+        <Card style={styles.statusCard} mode="outlined">
+          <Card.Content>
+            <View style={styles.statusRow}>
+              <View style={styles.statusItem}>
+                <View style={[styles.statusDot, { backgroundColor: adminColors.success }]} />
+                <Text style={styles.statusLabel}>Database Connected</Text>
+              </View>
+              <Text style={styles.statusValue}>Healthy</Text>
+            </View>
+            <View style={styles.statusRow}>
+              <View style={styles.statusItem}>
+                <View style={[styles.statusDot, { backgroundColor: adminColors.success }]} />
+                <Text style={styles.statusLabel}>Authentication</Text>
+              </View>
+              <Text style={styles.statusValue}>Active</Text>
+            </View>
+            <View style={styles.statusRow}>
+              <View style={styles.statusItem}>
+                <View style={[styles.statusDot, { backgroundColor: adminColors.warning }]} />
+                <Text style={styles.statusLabel}>Marketplace</Text>
+              </View>
+              <Text style={styles.statusValue}>{stats.listedCards} listings</Text>
+            </View>
+          </Card.Content>
+        </Card>
       </View>
     </ScrollView>
   );
@@ -199,137 +250,159 @@ export default function GMPDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: adminColors.background,
   },
   content: {
-    padding: spacing.lg,
+    padding: adminSpacing.lg,
   },
-  
-  // Welcome
-  welcomeSection: {
-    marginBottom: spacing.xl,
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: adminSpacing.xl,
   },
-  welcomeTitle: {
-    ...typography.h1,
-    color: colors.textPrimary,
+  greeting: {
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    marginBottom: 4,
   },
-  welcomeSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: adminColors.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: adminSpacing.sm,
+  },
+  headerButton: {
+    borderRadius: adminRadius.md,
   },
 
   // Stats Grid
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.xl,
+    gap: adminSpacing.md,
+    marginBottom: adminSpacing.xl,
   },
   statCard: {
     flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    ...shadows.sm,
+    minWidth: 150,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
   },
-  statEmoji: {
-    fontSize: 28,
-    marginBottom: spacing.sm,
+  statCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: adminSpacing.md,
+  },
+  statIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: adminRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statInfo: {
+    marginLeft: adminSpacing.md,
+    flex: 1,
   },
   statValue: {
-    ...typography.h2,
-    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '700',
+    color: adminColors.textPrimary,
   },
-  statLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    fontSize: 10,
+  statTitle: {
+    fontSize: 13,
+    color: adminColors.textSecondary,
+    marginTop: 2,
+  },
+  statSubtitle: {
+    fontSize: 11,
+    color: adminColors.textMuted,
+    marginTop: 2,
   },
 
   // Section
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: adminSpacing.xl,
   },
   sectionTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
+    fontSize: 18,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.md,
   },
 
   // Actions Grid
   actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
+    gap: adminSpacing.sm,
   },
   actionCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.md,
+    borderColor: adminColors.border,
+  },
+  actionContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: adminSpacing.sm,
   },
-  actionDesign: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(0, 245, 212, 0.05)',
-  },
-  actionMint: {
-    borderColor: colors.secondary,
-    backgroundColor: 'rgba(255, 0, 110, 0.05)',
-  },
-  actionGrant: {
-    borderColor: colors.legendary,
-    backgroundColor: 'rgba(245, 158, 11, 0.05)',
-  },
-  actionPlayer: {
-    borderColor: colors.info,
-    backgroundColor: 'rgba(6, 182, 212, 0.05)',
-  },
-  actionEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.sm,
+  actionIcon: {
+    fontSize: 28,
+    marginRight: adminSpacing.md,
   },
   actionText: {
-    ...typography.bodySmall,
-    color: colors.textPrimary,
+    flex: 1,
+  },
+  actionLabel: {
+    fontSize: 15,
     fontWeight: '600',
+    color: adminColors.textPrimary,
+  },
+  actionDesc: {
+    fontSize: 13,
+    color: adminColors.textSecondary,
+    marginTop: 2,
+  },
+  actionArrow: {
+    fontSize: 18,
+    color: adminColors.textMuted,
   },
 
-  // Status
+  // Status Card
   statusCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.md,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    borderColor: adminColors.border,
   },
   statusRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.sm,
+    paddingVertical: adminSpacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: adminColors.borderLight,
   },
-  statusIndicator: {
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.success,
+    marginRight: adminSpacing.sm,
   },
-  statusPending: {
-    backgroundColor: colors.warning,
+  statusLabel: {
+    fontSize: 14,
+    color: adminColors.textPrimary,
   },
-  statusText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+  statusValue: {
+    fontSize: 13,
+    color: adminColors.textSecondary,
   },
 });
-
