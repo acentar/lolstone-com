@@ -13,6 +13,7 @@ import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { CardDesign } from '../../src/types/database';
 import BoosterPackReveal from '../../src/components/BoosterPackReveal';
+import CryptoPayment from '../../src/components/CryptoPayment';
 import { spacing } from '../../src/constants/theme';
 
 const BOOSTER_COST = 100;
@@ -30,11 +31,12 @@ interface RevealedCard {
 }
 
 export default function ShopScreen() {
-  const { player, refreshPlayer } = useAuthContext();
+  const { player, refreshPlayer, user } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [availableCount, setAvailableCount] = useState(0);
   const [showReveal, setShowReveal] = useState(false);
   const [revealedCards, setRevealedCards] = useState<RevealedCard[]>([]);
+  const [showCryptoPayment, setShowCryptoPayment] = useState(false);
   
   // Animation for the pack
   const packFloat = useState(new Animated.Value(0))[0];
@@ -420,6 +422,45 @@ export default function ShopScreen() {
           </View>
         </View>
 
+        {/* Buy Ducats Section */}
+        <View style={styles.ducatsSection}>
+          <Text style={styles.sectionTitle}>💎 Buy Ducats with Crypto</Text>
+          <Pressable
+            style={styles.cryptoCard}
+            onPress={() => setShowCryptoPayment(true)}
+          >
+            <LinearGradient
+              colors={['#1e1e2e', '#2d2d44']}
+              style={styles.cryptoCardGradient}
+            >
+              <View style={styles.cryptoIconContainer}>
+                <Text style={styles.cryptoIcon}>👻</Text>
+              </View>
+              <View style={styles.cryptoInfo}>
+                <Text style={styles.cryptoTitle}>Phantom Wallet</Text>
+                <Text style={styles.cryptoSubtitle}>Pay with USDC or SOL</Text>
+              </View>
+              <View style={styles.cryptoArrow}>
+                <Text style={styles.arrowText}>→</Text>
+              </View>
+            </LinearGradient>
+          </Pressable>
+          <View style={styles.cryptoPackages}>
+            <View style={styles.packagePreview}>
+              <Text style={styles.packageDucats}>500</Text>
+              <Text style={styles.packageLabel}>$5</Text>
+            </View>
+            <View style={styles.packagePreview}>
+              <Text style={styles.packageDucats}>1,000</Text>
+              <Text style={styles.packageLabel}>$10</Text>
+            </View>
+            <View style={styles.packagePreview}>
+              <Text style={styles.packageDucats}>5,000</Text>
+              <Text style={styles.packageLabel}>$50</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Tips */}
         <View style={styles.tipsSection}>
           <Text style={styles.sectionTitle}>💡 Tips</Text>
@@ -441,6 +482,24 @@ export default function ShopScreen() {
         onClose={() => {
           setShowReveal(false);
           setRevealedCards([]);
+        }}
+      />
+
+      {/* Crypto Payment Modal */}
+      <CryptoPayment
+        visible={showCryptoPayment}
+        onClose={() => setShowCryptoPayment(false)}
+        playerId={user?.id || ''}
+        onSuccess={async (ducats, signature) => {
+          console.log(`Crypto payment successful: ${ducats} ducats, tx: ${signature}`);
+          // Refresh player data to get updated ducat balance
+          await refreshPlayer();
+          setShowCryptoPayment(false);
+          Alert.alert(
+            '🎉 Success!',
+            `You received ${ducats.toLocaleString()} ducats!`,
+            [{ text: 'Awesome!' }]
+          );
         }}
       />
     </LinearGradient>
@@ -673,6 +732,83 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 13,
     lineHeight: 22,
+  },
+
+  // Crypto payment section
+  ducatsSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  cryptoCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#8b5cf6',
+    marginBottom: spacing.md,
+  },
+  cryptoCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  cryptoIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  cryptoIcon: {
+    fontSize: 28,
+  },
+  cryptoInfo: {
+    flex: 1,
+  },
+  cryptoTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  cryptoSubtitle: {
+    color: '#a78bfa',
+    fontSize: 13,
+  },
+  cryptoArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arrowText: {
+    color: '#a78bfa',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  cryptoPackages: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  packagePreview: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+  },
+  packageDucats: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  packageLabel: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2,
   },
 });
 
