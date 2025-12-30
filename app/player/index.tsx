@@ -236,6 +236,51 @@ export default function PlayerHomeScreen() {
     }
   };
 
+  // Create GM account for current user
+  const createGMForCurrentUser = async () => {
+    if (!user?.id || !user?.email) {
+      Alert.alert('Error', 'No user logged in');
+      return;
+    }
+
+    try {
+      console.log('Creating GM account for:', user.email);
+
+      // Check if GM record already exists
+      const { data: existingGM } = await supabase
+        .from('game_masters')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (existingGM) {
+        Alert.alert('Info', 'GM account already exists!');
+        return;
+      }
+
+      // Create GM record
+      const { data, error } = await supabase
+        .from('game_masters')
+        .insert({
+          user_id: user.id,
+          name: 'Game Master',
+          email: user.email
+        });
+
+      if (error) {
+        console.error('Error creating GM:', error);
+        Alert.alert('Error', `Failed to create GM account: ${error.message}`);
+        return;
+      }
+
+      console.log('GM account created:', data);
+      Alert.alert('Success', 'GM account created! Refresh the page to access GMP.');
+    } catch (error) {
+      console.error('Exception creating GM:', error);
+      Alert.alert('Error', `Exception: ${error.message}`);
+    }
+  };
+
   return (
     <LinearGradient
       colors={['#0f172a', '#1e293b', '#0f172a']}
@@ -267,6 +312,12 @@ export default function PlayerHomeScreen() {
             onPress={debugAuthStatus}
           >
             <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>🔍 Debug Auth</Text>
+          </Pressable>
+          <Pressable
+            style={{ padding: 10, backgroundColor: '#22c55e', flex: 1, borderRadius: 8 }}
+            onPress={createGMForCurrentUser}
+          >
+            <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>⚡ Make GM</Text>
           </Pressable>
         </View>
 
