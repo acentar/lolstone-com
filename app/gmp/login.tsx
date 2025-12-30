@@ -27,8 +27,14 @@ export default function GMLoginScreen() {
 
   // Auto-navigate if already authenticated as GM
   React.useEffect(() => {
+    console.log('GM Login - Auth state:', { loading, user: user?.email, isGameMaster });
     if (!loading && user && isGameMaster) {
+      console.log('GM Login - Redirecting to GMP dashboard');
       router.replace('/gmp');
+    } else if (!loading && user && !isGameMaster) {
+      console.log('GM Login - User authenticated but not GM, staying on login page');
+    } else if (!loading && !user) {
+      console.log('GM Login - No user, staying on login page');
     }
   }, [loading, user, isGameMaster, router]);
 
@@ -38,15 +44,21 @@ export default function GMLoginScreen() {
       return;
     }
 
+    console.log('GM Login - Attempting login for:', email);
     setIsLoading(true);
     try {
       const { error } = await signIn(email, password);
+      console.log('GM Login - Sign in result:', { error, hasError: !!error });
+
       if (error) {
+        console.error('GM Login - Auth error:', error);
         Alert.alert('Login Failed', error.message || 'Invalid credentials');
+      } else {
+        console.log('GM Login - Auth successful, waiting for role check...');
+        // Success case will be handled by the useEffect above
       }
-      // Success case will be handled by the useEffect above
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('GM Login - Exception:', error);
       Alert.alert('Login Failed', error.message || 'Invalid credentials');
     } finally {
       setIsLoading(false);
@@ -136,6 +148,19 @@ export default function GMLoginScreen() {
                     </Text>
                   </LinearGradient>
                 </Pressable>
+
+                {/* Debug: Force navigation if auth works but redirect fails */}
+                {user && !isGameMaster && !loading && (
+                  <Pressable
+                    style={styles.debugButton}
+                    onPress={() => {
+                      console.log('Debug - Forcing GMP navigation');
+                      router.replace('/gmp');
+                    }}
+                  >
+                    <Text style={styles.debugButtonText}>Debug: Force GMP Access</Text>
+                  </Pressable>
+                )}
               </Animated.View>
 
               {/* Footer */}
@@ -280,6 +305,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  debugButton: {
+    marginTop: adminSpacing.sm,
+    padding: adminSpacing.sm,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderRadius: adminRadius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  debugButtonText: {
+    color: '#fca5a5',
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 
   // Footer
