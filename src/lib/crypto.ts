@@ -32,10 +32,30 @@ const loadSolanaLibs = async () => {
 };
 
 // Your receiver wallet address (hardcoded - keep private key offline!)
-export const RECEIVER_WALLET = new PublicKey('8XnSN4Jix5TDmybFix3f3ircvKK96FJGXiU4PEojubA4');
+export const RECEIVER_WALLET_ADDRESS = '8XnSN4Jix5TDmybFix3f3ircvKK96FJGXiU4PEojubA4';
 
 // USDC Mint on Solana Mainnet
-export const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+export const USDC_MINT_ADDRESS = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+// Lazy-loaded PublicKey instances
+let RECEIVER_WALLET: any = null;
+let USDC_MINT: any = null;
+
+const getReceiverWallet = async () => {
+  if (!RECEIVER_WALLET) {
+    await loadSolanaLibs();
+    RECEIVER_WALLET = new PublicKey(RECEIVER_WALLET_ADDRESS);
+  }
+  return RECEIVER_WALLET;
+};
+
+const getUsdcMint = async () => {
+  if (!USDC_MINT) {
+    await loadSolanaLibs();
+    USDC_MINT = new PublicKey(USDC_MINT_ADDRESS);
+  }
+  return USDC_MINT;
+};
 
 // USDC decimals (6)
 export const USDC_DECIMALS = 6;
@@ -139,9 +159,13 @@ export async function createUsdcTransferTransaction(
 
   const amount = calculateUsdcAmount(ducats);
 
+  // Get the mint and receiver wallet
+  const mint = await getUsdcMint();
+  const receiver = await getReceiverWallet();
+
   // Get associated token addresses
-  const senderATA = await getAssociatedTokenAddress(USDC_MINT, senderPublicKey);
-  const receiverATA = await getAssociatedTokenAddress(USDC_MINT, RECEIVER_WALLET);
+  const senderATA = await getAssociatedTokenAddress(mint, senderPublicKey);
+  const receiverATA = await getAssociatedTokenAddress(mint, receiver);
 
   // Create transfer instruction
   const transferInstruction = createTransferInstruction(
