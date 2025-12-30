@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
-import { Text, Card, Button, Menu } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Pressable, Alert, Modal } from 'react-native';
+import { Text, Card, Button } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthContext } from '../../src/context/AuthContext';
@@ -226,56 +226,25 @@ export default function PlayerHomeScreen() {
           <View style={styles.deckSection}>
             <Text style={styles.sectionTitle}>Battle Deck</Text>
             <View style={styles.deckSelectorContainer}>
-              <Menu
-                visible={deckMenuVisible}
-                onDismiss={() => setDeckMenuVisible(false)}
-                anchor={
-                  <Pressable
-                    style={styles.deckSelectorButton}
-                    onPress={() => setDeckMenuVisible(true)}
-                  >
-                    <Text style={styles.deckSelectorEmoji}>
-                      {selectedDeck ? '⚔️' : '📚'}
-                    </Text>
-                    <View style={styles.deckSelectorInfo}>
-                      <Text style={styles.deckSelectorLabel}>
-                        {selectedDeck ? selectedDeck.name : 'Choose a deck'}
-                      </Text>
-                      <Text style={styles.deckSelectorStatus}>
-                        {selectedDeck ? 'Ready for battle' : 'Select to play'}
-                      </Text>
-                    </View>
-                    <Text style={styles.deckSelectorArrow}>
-                      {deckMenuVisible ? '▲' : '▼'}
-                    </Text>
-                  </Pressable>
-                }
+              <Pressable
+                style={styles.deckSelectorButton}
+                onPress={() => setDeckMenuVisible(true)}
               >
-                {decks.length > 0 ? (
-                  decks.map((deck) => (
-                    <Menu.Item
-                      key={deck.id}
-                      title={deck.name}
-                      onPress={() => selectDeck(deck)}
-                      leadingIcon={selectedDeck?.id === deck.id ? 'check' : undefined}
-                    />
-                  ))
-                ) : (
-                  <Menu.Item
-                    title="No decks available"
-                    disabled
-                    leadingIcon="alert-circle"
-                  />
-                )}
-                <Menu.Item
-                  title="Create New Deck"
-                  onPress={() => {
-                    setDeckMenuVisible(false);
-                    router.push('/player/decks');
-                  }}
-                  leadingIcon="plus"
-                />
-              </Menu>
+                <Text style={styles.deckSelectorEmoji}>
+                  {selectedDeck ? '⚔️' : '📚'}
+                </Text>
+                <View style={styles.deckSelectorInfo}>
+                  <Text style={styles.deckSelectorLabel}>
+                    {selectedDeck ? selectedDeck.name : 'Choose a deck'}
+                  </Text>
+                  <Text style={styles.deckSelectorStatus}>
+                    {selectedDeck ? 'Ready for battle' : 'Select to play'}
+                  </Text>
+                </View>
+                <Text style={styles.deckSelectorArrow}>
+                  {deckMenuVisible ? '▲' : '▼'}
+                </Text>
+              </Pressable>
             </View>
           </View>
 
@@ -389,6 +358,64 @@ export default function PlayerHomeScreen() {
           <Text style={styles.emptySubtext}>Start playing to see your history!</Text>
         </View>
       </ScrollView>
+
+      {/* Deck Selection Modal */}
+      <Modal
+        visible={deckMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeckMenuVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setDeckMenuVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Battle Deck</Text>
+
+            {decks.length > 0 ? (
+              decks.map((deck) => (
+                <Pressable
+                  key={deck.id}
+                  style={[
+                    styles.modalDeckItem,
+                    selectedDeck?.id === deck.id && styles.modalDeckItemSelected
+                  ]}
+                  onPress={() => selectDeck(deck)}
+                >
+                  <View style={styles.modalDeckInfo}>
+                    <Text style={styles.modalDeckName}>{deck.name}</Text>
+                    <Text style={styles.modalDeckCards}>
+                      {deck.deck_cards?.[0]?.count || 0} cards
+                    </Text>
+                  </View>
+                  {selectedDeck?.id === deck.id && (
+                    <Text style={styles.modalCheckmark}>✓</Text>
+                  )}
+                </Pressable>
+              ))
+            ) : (
+              <View style={styles.modalEmptyState}>
+                <Text style={styles.modalEmptyEmoji}>📚</Text>
+                <Text style={styles.modalEmptyTitle}>No decks available</Text>
+                <Text style={styles.modalEmptyText}>
+                  Create a deck with at least 30 cards to play
+                </Text>
+              </View>
+            )}
+
+            <Pressable
+              style={styles.modalCreateButton}
+              onPress={() => {
+                setDeckMenuVisible(false);
+                router.push('/player/decks');
+              }}
+            >
+              <Text style={styles.modalCreateText}>+ Create New Deck</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -650,5 +677,93 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 13,
     marginTop: 4,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: spacing.xl,
+    margin: spacing.lg,
+    maxWidth: 400,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 0.5)',
+  },
+  modalTitle: {
+    color: '#f8fafc',
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalDeckItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 0.5)',
+  },
+  modalDeckItemSelected: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  modalDeckInfo: {
+    flex: 1,
+  },
+  modalDeckName: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalDeckCards: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalCheckmark: {
+    color: '#22c55e',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalEmptyState: {
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  modalEmptyEmoji: {
+    fontSize: 48,
+    marginBottom: spacing.md,
+  },
+  modalEmptyTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+  },
+  modalEmptyText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  modalCreateButton: {
+    backgroundColor: '#3b82f6',
+    padding: spacing.md,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  modalCreateText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
