@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { Text, Card } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { supabase } from '../../src/lib/supabase';
 import { colors, spacing } from '../../src/constants/theme';
+import { Deck } from '../../src/types/database';
 
 export default function PlayerHomeScreen() {
   const { player, refreshPlayer } = useAuthContext();
@@ -16,10 +17,47 @@ export default function PlayerHomeScreen() {
     gamesWon: 0,
     gamesPlayed: 0,
   });
+  const [selectedDeck, setSelectedDeck] = useState<Deck | null>(null);
+  const [activeGames, setActiveGames] = useState<any[]>([]);
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [disconnectedGames, setDisconnectedGames] = useState<any[]>([]);
+
+  // Background task to check for disconnected players and auto-declare winners
+  useEffect(() => {
+    const checkDisconnectedPlayers = async () => {
+      try {
+        // Check for disconnected games and declare winners
+        const { error } = await supabase.rpc('check_disconnected_players');
+        if (error) {
+          console.warn('Error checking disconnected players:', error);
+        }
+
+        // Get disconnected games info for UI display
+        const { data, error: fetchError } = await supabase.rpc('get_disconnected_games');
+        if (fetchError) {
+          console.warn('Error fetching disconnected games:', fetchError);
+        } else {
+          setDisconnectedGames(data || []);
+        }
+      } catch (err) {
+        console.warn('Failed to check disconnected players:', err);
+      }
+    };
+
+    // Check every 30 seconds
+    const interval = setInterval(checkDisconnectedPlayers, 30000);
+
+    // Initial check
+    checkDisconnectedPlayers();
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (player?.id) {
       loadStats();
+      loadDecks();
+      loadActiveGames();
       refreshPlayer();
     }
   }, [player?.id]);
@@ -51,6 +89,81 @@ export default function PlayerHomeScreen() {
     }
   };
 
+  const loadDecks = async () => {
+    if (!player?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('decks')
+        .select(`
+          *,
+          deck_cards (count)
+        `)
+        .eq('player_id', player.id);
+
+      if (error) throw error;
+
+      // Filter to decks with 30+ cards
+      const validDecks = (data || []).filter(deck => {
+        const cardCount = deck.deck_cards?.[0]?.count || 0;
+        return cardCount >= 30;
+      });
+
+      setDecks(validDecks);
+
+      // Auto-select the active deck if available
+      const activeDeck = validDecks.find(d => d.is_active);
+      if (activeDeck) {
+        setSelectedDeck(activeDeck);
+      }
+    } catch (error) {
+      console.error('Error loading decks:', error);
+    }
+  };
+
+  const loadActiveGames = async () => {
+    if (!player?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('game_rooms')
+        .select(`
+          id,
+          status,
+          player1_id,
+          player2_id,
+          player1_name,
+          player2_name,
+          created_at,
+          players!game_rooms_player1_id_fkey (name, avatar_url)
+        `)
+        .or(`player1_id.eq.${player.id},player2_id.eq.${player.id}`)
+        .eq('status', 'playing')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setActiveGames(data || []);
+    } catch (error) {
+      console.error('Error loading active games:', error);
+    }
+  };
+
+  const handlePlayPress = () => {
+    if (!selectedDeck) {
+      Alert.alert(
+        'Select a Deck',
+        'You must select a deck before playing. Go to your Decks tab to choose one.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Go to Decks', onPress: () => router.push('/player/decks') }
+        ]
+      );
+      return;
+    }
+
+    router.push('/player/play');
+  };
+
   return (
     <LinearGradient
       colors={['#0f172a', '#1e293b', '#0f172a']}
@@ -72,7 +185,7 @@ export default function PlayerHomeScreen() {
         {/* Quick Play Button */}
         <Pressable
           style={styles.playButton}
-          onPress={() => router.push('/player/play')}
+          onPress={handlePlayPress}
         >
           <LinearGradient
             colors={['#22c55e', '#16a34a']}
@@ -87,6 +200,90 @@ export default function PlayerHomeScreen() {
             </View>
           </LinearGradient>
         </Pressable>
+
+        {/* Deck Selection & Active Games */}
+        <View style={styles.deckAndGamesSection}>
+          <View style={styles.deckSection}>
+            <Text style={styles.sectionTitle}>Selected Deck</Text>
+            {selectedDeck ? (
+              <View style={styles.selectedDeckCard}>
+                <Text style={styles.selectedDeckName}>{selectedDeck.name}</Text>
+                <Text style={styles.selectedDeckStatus}>✓ Ready for battle</Text>
+                <Pressable
+                  style={styles.changeDeckButton}
+                  onPress={() => router.push('/player/decks')}
+                >
+                  <Text style={styles.changeDeckText}>Change</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.selectDeckCard}
+                onPress={() => router.push('/player/decks')}
+              >
+                <Text style={styles.selectDeckEmoji}>📚</Text>
+                <View style={styles.selectDeckInfo}>
+                  <Text style={styles.selectDeckTitle}>Select a Deck</Text>
+                  <Text style={styles.selectDeckSubtitle}>Choose your battle deck</Text>
+                </View>
+                <Text style={styles.selectDeckArrow}>→</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Active Games */}
+          {activeGames.length > 0 && (
+            <View style={styles.activeGamesSection}>
+              <Text style={styles.sectionTitle}>Active Games</Text>
+              {activeGames.slice(0, 2).map((game) => {
+                // Check if this game has a disconnected player
+                const disconnectedInfo = disconnectedGames.find(dg => dg.game_id === game.id);
+                const isOpponentDisconnected = disconnectedInfo && disconnectedInfo.disconnected_player_id !== player?.id;
+                const isPlayerDisconnected = disconnectedInfo && disconnectedInfo.disconnected_player_id === player?.id;
+                const timeLeft = disconnectedInfo ? Math.max(0, 3 - disconnectedInfo.minutes_elapsed) : null;
+
+                return (
+                  <Pressable
+                    key={game.id}
+                    style={[
+                      styles.activeGameCard,
+                      isOpponentDisconnected && styles.activeGameCardWarning,
+                      isPlayerDisconnected && styles.activeGameCardDanger
+                    ]}
+                    onPress={() => router.push(`/player/game/${game.id}`)}
+                  >
+                    <View style={styles.activeGameHeader}>
+                      <Text style={styles.activeGameOpponent}>
+                        vs {game.player1_id === player?.id ? game.player2_name : game.player1_name}
+                      </Text>
+                      <View style={[
+                        styles.activeGameStatus,
+                        isOpponentDisconnected && styles.activeGameStatusWarning,
+                        isPlayerDisconnected && styles.activeGameStatusDanger
+                      ]}>
+                        <Text style={[
+                          styles.activeGameStatusText,
+                          (isOpponentDisconnected || isPlayerDisconnected) && styles.activeGameStatusTextWarning
+                        ]}>
+                          {isPlayerDisconnected ? 'YOU DC' :
+                           isOpponentDisconnected ? 'OPP DC' : 'LIVE'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.activeGameAction}>
+                      {isPlayerDisconnected ?
+                        `⚠️ Return in ${timeLeft?.toFixed(1)}m or lose!` :
+                        isOpponentDisconnected ?
+                        `🎯 Win in ${timeLeft?.toFixed(1)}m if they don't return!` :
+                        'Tap to rejoin →'
+                      }
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
@@ -222,6 +419,132 @@ const styles = StyleSheet.create({
   playSubtext: {
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 12,
+  },
+  deckAndGamesSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  deckSection: {
+    marginBottom: spacing.md,
+  },
+  selectedDeckCard: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderRadius: 12,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectedDeckName: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  selectedDeckStatus: {
+    color: '#22c55e',
+    fontSize: 12,
+    marginRight: spacing.md,
+  },
+  changeDeckButton: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 6,
+  },
+  changeDeckText: {
+    color: '#22c55e',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  selectDeckCard: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderRadius: 12,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectDeckEmoji: {
+    fontSize: 24,
+    marginRight: spacing.md,
+  },
+  selectDeckInfo: {
+    flex: 1,
+  },
+  selectDeckTitle: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectDeckSubtitle: {
+    color: '#d97706',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  selectDeckArrow: {
+    color: '#f59e0b',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  activeGamesSection: {
+    marginTop: spacing.md,
+  },
+  activeGameCard: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  activeGameCardWarning: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  activeGameCardDanger: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  activeGameHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  activeGameOpponent: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  activeGameStatus: {
+    backgroundColor: '#22c55e',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activeGameStatusWarning: {
+    backgroundColor: '#f59e0b',
+  },
+  activeGameStatusDanger: {
+    backgroundColor: '#ef4444',
+  },
+  activeGameStatusText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  activeGameStatusTextWarning: {
+    color: '#fff',
+  },
+  activeGameAction: {
+    color: '#fca5a5',
+    fontSize: 13,
   },
   statsGrid: {
     flexDirection: 'row',

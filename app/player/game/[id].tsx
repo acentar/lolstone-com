@@ -32,13 +32,13 @@ export default function GamePlayScreen() {
   // Load game room and initialize game
   useEffect(() => {
     if (!gameRoomId || !player) return;
-    
+
     loadGame();
-    
+
     // Subscribe to game room changes
     const unsubscribe = matchmakingService.subscribeToGame(gameRoomId, (updatedRoom) => {
       setGameRoom(updatedRoom);
-      
+
       // If opponent updated game state, sync it
       if (updatedRoom.game_state && gameInstance) {
         // Only update if it's a new state from opponent
@@ -51,6 +51,79 @@ export default function GamePlayScreen() {
     });
 
     return unsubscribe;
+  }, [gameRoomId, player]);
+
+  // Track player presence - mark as connected when entering game
+  useEffect(() => {
+    if (!gameRoomId || !player) return;
+
+    const markConnected = async () => {
+      try {
+        const { error } = await supabase.rpc('update_player_presence', {
+          p_game_room_id: gameRoomId,
+          p_player_id: player.id,
+          p_connected: true
+        });
+
+        if (error) {
+          console.warn('Failed to mark player as connected:', error);
+        } else {
+          console.log('Player marked as connected to game');
+        }
+      } catch (err) {
+        console.warn('Error marking player connected:', err);
+      }
+    };
+
+    markConnected();
+  }, [gameRoomId, player]);
+
+  // Track player disconnection when leaving the game
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      if (gameRoomId && player) {
+        try {
+          await supabase.rpc('update_player_presence', {
+            p_game_room_id: gameRoomId,
+            p_player_id: player.id,
+            p_connected: false
+          });
+          console.log('Player marked as disconnected from game');
+        } catch (err) {
+          console.warn('Error marking player disconnected:', err);
+        }
+      }
+    };
+
+    // Handle page unload
+    const unsubscribe = () => {
+      handleBeforeUnload();
+    };
+
+    return unsubscribe;
+  }, [gameRoomId, player]);
+
+  // Handle visibility change (tab switch, minimize, etc.)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!gameRoomId || !player) return;
+
+      const isVisible = !document.hidden;
+      try {
+        await supabase.rpc('update_player_presence', {
+          p_game_room_id: gameRoomId,
+          p_player_id: player.id,
+          p_connected: isVisible
+        });
+
+        console.log(`Player ${isVisible ? 'connected' : 'disconnected'} (visibility change)`);
+      } catch (err) {
+        console.warn('Error updating presence on visibility change:', err);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [gameRoomId, player]);
 
   const loadGame = async () => {
