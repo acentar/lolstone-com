@@ -209,6 +209,13 @@ export default function PlayerHomeScreen() {
 
         console.log('GM record from database:', { gmRecord, gmError });
 
+        // Also check by email to see all GM accounts
+        const { data: allGMs, error: allGMError } = await supabase
+          .from('game_masters')
+          .select('*');
+
+        console.log('All GM records:', { allGMs, allGMError });
+
         setDebugInfo({
           userId: user.id,
           email: user.email,
