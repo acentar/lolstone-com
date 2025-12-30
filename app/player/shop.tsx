@@ -11,6 +11,7 @@ import { Text, ActivityIndicator, Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
+import { useWalletContext } from '../../src/context/WalletContext';
 import { CardDesign } from '../../src/types/database';
 import BoosterPackReveal from '../../src/components/BoosterPackReveal';
 import CryptoPayment from '../../src/components/CryptoPayment';
@@ -32,6 +33,7 @@ interface RevealedCard {
 
 export default function ShopScreen() {
   const { player, refreshPlayer, user } = useAuthContext();
+  const { connected, publicKey, connect, connecting } = useWalletContext();
   const [loading, setLoading] = useState(false);
   const [availableCount, setAvailableCount] = useState(0);
   const [showReveal, setShowReveal] = useState(false);
@@ -425,19 +427,57 @@ export default function ShopScreen() {
         {/* Buy Ducats Section */}
         <View style={styles.ducatsSection}>
           <Text style={styles.sectionTitle}>💎 Buy Ducats with Crypto</Text>
+          
+          {/* Wallet Status Card */}
+          {connected && publicKey ? (
+            <View style={styles.walletConnectedCard}>
+              <Text style={styles.walletConnectedIcon}>✅</Text>
+              <View style={styles.walletConnectedInfo}>
+                <Text style={styles.walletConnectedTitle}>Wallet Connected</Text>
+                <Text style={styles.walletConnectedAddress}>
+                  👻 {typeof publicKey === 'string' 
+                    ? `${publicKey.slice(0, 6)}...${publicKey.slice(-4)}`
+                    : publicKey.toBase58 
+                      ? `${publicKey.toBase58().slice(0, 6)}...${publicKey.toBase58().slice(-4)}`
+                      : 'Connected'
+                  }
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              style={styles.connectWalletCard}
+              onPress={connect}
+              disabled={connecting}
+            >
+              <Text style={styles.connectWalletIcon}>{connecting ? '⏳' : '👻'}</Text>
+              <View style={styles.connectWalletInfo}>
+                <Text style={styles.connectWalletTitle}>
+                  {connecting ? 'Connecting...' : 'Connect Phantom Wallet'}
+                </Text>
+                <Text style={styles.connectWalletSubtitle}>
+                  Connect to purchase ducats with crypto
+                </Text>
+              </View>
+            </Pressable>
+          )}
+
+          {/* Buy Button */}
           <Pressable
             style={styles.cryptoCard}
             onPress={() => setShowCryptoPayment(true)}
           >
             <LinearGradient
-              colors={['#1e1e2e', '#2d2d44']}
+              colors={connected ? ['#22c55e', '#16a34a'] : ['#1e1e2e', '#2d2d44']}
               style={styles.cryptoCardGradient}
             >
               <View style={styles.cryptoIconContainer}>
-                <Text style={styles.cryptoIcon}>👻</Text>
+                <Text style={styles.cryptoIcon}>💎</Text>
               </View>
               <View style={styles.cryptoInfo}>
-                <Text style={styles.cryptoTitle}>Phantom Wallet</Text>
+                <Text style={styles.cryptoTitle}>
+                  {connected ? 'Buy Ducats Now' : 'Phantom Wallet'}
+                </Text>
                 <Text style={styles.cryptoSubtitle}>Pay with USDC or SOL</Text>
               </View>
               <View style={styles.cryptoArrow}>
@@ -807,6 +847,61 @@ const styles = StyleSheet.create({
   },
   packageLabel: {
     color: '#64748b',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  // Wallet connection styles
+  walletConnectedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  walletConnectedIcon: {
+    fontSize: 24,
+    marginRight: spacing.sm,
+  },
+  walletConnectedInfo: {
+    flex: 1,
+  },
+  walletConnectedTitle: {
+    color: '#22c55e',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  walletConnectedAddress: {
+    color: '#86efac',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  connectWalletCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  connectWalletIcon: {
+    fontSize: 28,
+    marginRight: spacing.sm,
+  },
+  connectWalletInfo: {
+    flex: 1,
+  },
+  connectWalletTitle: {
+    color: '#a78bfa',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  connectWalletSubtitle: {
+    color: '#7c3aed',
     fontSize: 12,
     marginTop: 2,
   },

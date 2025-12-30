@@ -13,6 +13,7 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -413,31 +414,46 @@ export default function CryptoPayment({
             <Text style={styles.closeButtonText}>✕</Text>
           </Pressable>
 
-          {/* Connection Status - always show if connected */}
-          {connected && publicKey && (
-            <View style={styles.walletStatus}>
-              <Text style={styles.walletIcon}>👻</Text>
-              <Text style={styles.walletAddress}>
-                {typeof publicKey === 'string' 
-                  ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
-                  : publicKey.toBase58 
-                    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
-                    : 'Connected'
-                }
-              </Text>
-              <Pressable onPress={disconnect} style={styles.disconnectButton}>
-                <Text style={styles.disconnectText}>Disconnect</Text>
-              </Pressable>
-            </View>
-          )}
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Connection Status - always show if connected */}
+            {connected && publicKey && (
+              <View style={styles.walletStatus}>
+                <View style={styles.connectedBadge}>
+                  <Text style={styles.connectedBadgeText}>✅ Connected</Text>
+                </View>
+                <Text style={styles.walletIcon}>👻</Text>
+                <Text style={styles.walletAddress}>
+                  {typeof publicKey === 'string' 
+                    ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
+                    : publicKey.toBase58 
+                      ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+                      : 'Wallet'
+                  }
+                </Text>
+                <Pressable onPress={disconnect} style={styles.disconnectButton}>
+                  <Text style={styles.disconnectText}>Change</Text>
+                </Pressable>
+              </View>
+            )}
 
-          {/* Content based on state */}
-          {paymentState === 'select' && !connected && renderConnectFirst()}
-          {paymentState === 'select' && connected && renderPackageSelection()}
-          {paymentState === 'connecting' && renderConnecting()}
-          {paymentState === 'processing' && renderProcessing()}
-          {paymentState === 'success' && renderSuccess()}
-          {paymentState === 'error' && renderError()}
+            {/* Debug info */}
+            {__DEV__ && (
+              <Text style={{ color: '#666', fontSize: 10, textAlign: 'center', marginBottom: 8 }}>
+                Debug: paymentState={paymentState}, connected={String(connected)}, hasConnection={String(!!connection)}
+              </Text>
+            )}
+
+            {/* Content based on state */}
+            {paymentState === 'select' && !connected && renderConnectFirst()}
+            {paymentState === 'select' && connected && renderPackageSelection()}
+            {paymentState === 'connecting' && renderConnecting()}
+            {paymentState === 'processing' && renderProcessing()}
+            {paymentState === 'success' && renderSuccess()}
+            {paymentState === 'error' && renderError()}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -461,6 +477,9 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     borderColor: '#2d2d44',
+  },
+  scrollContent: {
+    paddingTop: 8,
   },
   closeButton: {
     position: 'absolute',
@@ -769,6 +788,18 @@ const styles = StyleSheet.create({
     color: '#fca5a5',
     fontSize: 12,
     fontWeight: '500',
+  },
+  connectedBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  connectedBadgeText: {
+    color: '#22c55e',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

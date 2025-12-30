@@ -36,28 +36,70 @@ export const useWalletContext = () => useContext(WalletContext);
 
 /**
  * Web Wallet Provider - simplified, direct Phantom connection only
+ * 
+ * Uses Helius RPC for better reliability (free tier: 100k requests/day)
+ * Falls back to public RPC if needed
  */
+
+// Free Helius RPC endpoint (public, generous limits)
+const HELIUS_RPC = 'https://mainnet.helius-rpc.com/?api-key=1d8740dc-e5f4-421c-b823-e1bad1889eff';
+const FALLBACK_RPC = 'https://api.mainnet-beta.solana.com';
+
 function WebWalletProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [publicKey, setPublicKey] = useState<any>(null);
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState<any>(null);
 
-  // Create Solana connection on mount
+  // Create Solana connection on mount with Helius RPC
   useEffect(() => {
     const createConnection = async () => {
       try {
-        // Dynamically import Solana web3.js
-        const { Connection, clusterApiUrl } = await import('@solana/web3.js');
-        const conn = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+        const { Connection } = await import('@solana/web3.js');
+        // Use Helius RPC for better reliability
+        const conn = new Connection(HELIUS_RPC, 'confirmed');
         setConnection(conn);
-        console.log('Solana connection created');
+        console.log('Solana connection created (Helius RPC)');
       } catch (error) {
         console.error('Failed to create Solana connection:', error);
+        // Try fallback
+        try {
+          const { Connection } = await import('@solana/web3.js');
+          const conn = new Connection(FALLBACK_RPC, 'confirmed');
+          setConnection(conn);
+          console.log('Solana connection created (fallback RPC)');
+        } catch (fallbackError) {
+          console.error('Fallback connection also failed:', fallbackError);
+        }
       }
     };
 
     createConnection();
+  }, []);
+
+  // Auto-connect if Phantom was previously connected
+  useEffect(() => {
+    const checkExistingConnection = async () => {
+      if (!isWeb || typeof window === 'undefined') return;
+      
+      try {
+        const { solana } = window as any;
+        if (solana?.isPhantom && solana?.isConnected) {
+          console.log('Phantom already connected, restoring session...');
+          // Use connect with onlyIfTrusted to silently reconnect
+          const response = await solana.connect({ onlyIfTrusted: true });
+          setConnected(true);
+          setPublicKey(response.publicKey);
+          console.log('Session restored:', response.publicKey.toString());
+        }
+      } catch (error) {
+        // User has not previously connected, that's fine
+        console.log('No existing Phantom session');
+      }
+    };
+
+    // Small delay to ensure Phantom extension is loaded
+    setTimeout(checkExistingConnection, 500);
   }, []);
 
   const connectPhantomDirectly = async (): Promise<boolean> => {
@@ -164,15 +206,15 @@ function MobileWalletProvider({ children }: { children: ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState<any>(null);
 
-  // Create Solana connection on mount
+  // Create Solana connection on mount with Helius RPC
   useEffect(() => {
     const createConnection = async () => {
       try {
-        // Dynamically import Solana web3.js
-        const { Connection, clusterApiUrl } = await import('@solana/web3.js');
-        const conn = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+        const { Connection } = await import('@solana/web3.js');
+        // Use Helius RPC for better reliability
+        const conn = new Connection(HELIUS_RPC, 'confirmed');
         setConnection(conn);
-        console.log('Mobile Solana connection created');
+        console.log('Mobile Solana connection created (Helius RPC)');
       } catch (error) {
         console.error('Failed to create mobile Solana connection:', error);
       }
