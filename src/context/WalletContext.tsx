@@ -72,6 +72,7 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
           WalletProvider: walletAdapterReact.WalletProvider,
           useWallet: walletAdapterReact.useWallet,
           useConnection: walletAdapterReact.useConnection,
+          useWalletModal: walletAdapterReactUi.useWalletModal,
           WalletModalProvider: walletAdapterReactUi.WalletModalProvider,
           WalletMultiButton: walletAdapterReactUi.WalletMultiButton,
           PhantomWalletAdapter: walletAdapterWallets.PhantomWalletAdapter,
@@ -110,22 +111,27 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
 /**
  * Bridges the wallet adapter hooks to our context
  */
-function WebWalletContextBridge({ 
-  children, 
-  WalletComponents 
-}: { 
-  children: ReactNode; 
+function WebWalletContextBridge({
+  children,
+  WalletComponents
+}: {
+  children: ReactNode;
   WalletComponents: any;
 }) {
-  const { useWallet, useConnection } = WalletComponents;
+  const { useWallet, useConnection, useWalletModal } = WalletComponents;
   const wallet = useWallet();
   const { connection } = useConnection();
+  const { setVisible } = useWalletModal();
 
   const value: WalletContextType = {
     connected: wallet.connected,
     publicKey: wallet.publicKey,
     connecting: wallet.connecting,
-    connect: wallet.connect,
+    connect: () => {
+      console.log('Opening wallet modal...');
+      setVisible(true);
+      return Promise.resolve();
+    },
     disconnect: wallet.disconnect,
     signAndSendTransaction: async (transaction: Transaction) => {
       if (!wallet.signTransaction || !wallet.publicKey) {

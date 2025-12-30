@@ -52,6 +52,8 @@ export default function CryptoPayment({
   playerId,
 }: CryptoPaymentProps) {
   const { connected, publicKey, connecting, connect, signAndSendTransaction, connection } = useWalletContext();
+  const [walletButtonLoaded, setWalletButtonLoaded] = useState(false);
+  const [WalletButtonComponent, setWalletButtonComponent] = useState<any>(null);
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
@@ -84,6 +86,25 @@ export default function CryptoPayment({
     }
   }, [visible]);
 
+  // Load WalletMultiButton for web
+  useEffect(() => {
+    if (Platform.OS === 'web' && visible) {
+      import('@solana/wallet-adapter-react-ui').then(module => {
+        setWalletButtonComponent(() => module.WalletMultiButton);
+        setWalletButtonLoaded(true);
+      }).catch(err => {
+        console.log('WalletMultiButton not available:', err);
+      });
+    }
+  }, [visible]);
+
+  // Update payment state when wallet connects
+  useEffect(() => {
+    if (connected && paymentState === 'connecting') {
+      setPaymentState('confirming');
+    }
+  }, [connected, paymentState]);
+
   const handlePackageSelect = (pkg: typeof DUCAT_PACKAGES[0]) => {
     setSelectedPackage(pkg);
     setError(null);
@@ -92,9 +113,25 @@ export default function CryptoPayment({
   const handleConnect = async () => {
     setPaymentState('connecting');
     try {
+      console.log('Attempting to connect wallet...');
       await connect();
-      setPaymentState('confirming');
+      console.log('Connect function completed, checking connection status...');
+      // Check if we're now connected
+      if (connected) {
+        setPaymentState('confirming');
+      } else {
+        // If not connected yet, wait a bit and check again
+        setTimeout(() => {
+          if (connected) {
+            setPaymentState('confirming');
+          } else {
+            setError('Please complete wallet connection in the popup');
+            setPaymentState('select');
+          }
+        }, 2000);
+      }
     } catch (err) {
+      console.error('Connect error:', err);
       setError('Failed to connect wallet');
       setPaymentState('select');
     }
@@ -212,19 +249,39 @@ export default function CryptoPayment({
       )}
 
       {selectedPackage && (
-        <Pressable
-          style={styles.buyButton}
-          onPress={connected ? handlePurchase : handleConnect}
-        >
-          <LinearGradient
-            colors={['#22c55e', '#16a34a']}
-            style={styles.buyButtonGradient}
+        connected ? (
+          <Pressable
+            style={styles.buyButton}
+            onPress={handlePurchase}
           >
-            <Text style={styles.buyButtonText}>
-              {connected ? '🔐 Confirm Purchase' : '👻 Connect Phantom'}
-            </Text>
-          </LinearGradient>
-        </Pressable>
+            <LinearGradient
+              colors={['#22c55e', '#16a34a']}
+              style={styles.buyButtonGradient}
+            >
+              <Text style={styles.buyButtonText}>
+                🔐 Confirm Purchase
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        ) : Platform.OS === 'web' && WalletButtonComponent && walletButtonLoaded ? (
+          <View style={styles.walletButtonContainer}>
+            <WalletButtonComponent />
+          </View>
+        ) : (
+          <Pressable
+            style={styles.buyButton}
+            onPress={handleConnect}
+          >
+            <LinearGradient
+              colors={['#22c55e', '#16a34a']}
+              style={styles.buyButtonGradient}
+            >
+              <Text style={styles.buyButtonText}>
+                👻 Connect Phantom
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        )
       )}
 
       {error && (
@@ -490,6 +547,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  walletButtonContainer: {
+    width: '100%',
+    alignItems: 'center',
   },
   errorContainer: {
     marginTop: 16,
