@@ -51,13 +51,8 @@ export default function CryptoPayment({
   onSuccess,
   playerId,
 }: CryptoPaymentProps) {
-  // Temporarily disabled wallet context
-  // const { connected, publicKey, connecting, connect, signAndSendTransaction, connection } = useWalletContext();
-  const connected = false;
-  const publicKey = null;
-  const connecting = false;
-  const connect = async () => {};
-  const signAndSendTransaction = async () => '';
+  // Use wallet context for Phantom connection
+  const { connected, publicKey, connecting, connect, signAndSendTransaction } = useWalletContext();
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
@@ -139,15 +134,24 @@ export default function CryptoPayment({
         console.log('Trying direct Phantom connection...');
         await connect();
 
-        // Check if connection was successful
-        setTimeout(() => {
-          if (connected) {
-            setPaymentState('confirming');
-          } else {
-            setError('Connection failed. Please try again or refresh the page.');
-            setPaymentState('select');
-          }
-        }, 2000);
+        // Check if connection was successful by directly checking window.solana
+        const { solana } = window as any;
+        if (solana?.isConnected && solana?.publicKey) {
+          console.log('Connection successful!', solana.publicKey.toString());
+          setPaymentState('confirming');
+        } else {
+          // Wait a moment for connection to complete
+          setTimeout(() => {
+            const { solana: solanaCheck } = window as any;
+            if (solanaCheck?.isConnected && solanaCheck?.publicKey) {
+              console.log('Connection successful (delayed)!', solanaCheck.publicKey.toString());
+              setPaymentState('confirming');
+            } else {
+              setError('Connection failed. Please try again or refresh the page.');
+              setPaymentState('select');
+            }
+          }, 1500);
+        }
       } else {
         // Mobile - use deep linking
         await connect();

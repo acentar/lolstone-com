@@ -43,24 +43,35 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
   const [connecting, setConnecting] = useState(false);
 
   const connectPhantomDirectly = async (): Promise<boolean> => {
-    if (!isWeb || typeof window === 'undefined') return false;
+    if (!isWeb || typeof window === 'undefined') {
+      console.log('Not in web environment');
+      return false;
+    }
 
     try {
       const { solana } = window as any;
+      console.log('Window.solana:', solana);
+      console.log('Is Phantom:', solana?.isPhantom);
+      
       if (!solana?.isPhantom) {
-        console.log('Phantom not detected');
+        console.log('Phantom not detected in window.solana');
         return false;
       }
 
       console.log('Phantom detected, attempting direct connection...');
+      
+      // Request connection - this should open the Phantom popup
       const response = await solana.connect();
-      console.log('Phantom connected:', response.publicKey.toString());
+      console.log('Phantom connection response:', response);
+      console.log('Phantom connected! Public key:', response.publicKey.toString());
 
       setConnected(true);
       setPublicKey(response.publicKey.toString());
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Direct Phantom connection failed:', error);
+      console.error('Error message:', error?.message);
+      console.error('Error code:', error?.code);
       return false;
     }
   };
