@@ -227,7 +227,13 @@ export default function PlayerHomeScreen() {
             <Text style={styles.sectionTitle}>Battle Deck</Text>
             <View style={styles.deckSelectorContainer}>
               <Pressable
-                style={styles.deckSelectorButton}
+                style={[
+                  styles.deckSelectorButton,
+                  {
+                    backgroundColor: selectedDeck ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                    borderColor: selectedDeck ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)',
+                  }
+                ]}
                 onPress={() => setDeckMenuVisible(true)}
               >
                 <Text style={styles.deckSelectorEmoji}>
@@ -237,11 +243,17 @@ export default function PlayerHomeScreen() {
                   <Text style={styles.deckSelectorLabel}>
                     {selectedDeck ? selectedDeck.name : 'Choose a deck'}
                   </Text>
-                  <Text style={styles.deckSelectorStatus}>
+                  <Text style={[
+                    styles.deckSelectorStatus,
+                    { color: selectedDeck ? '#22c55e' : '#f59e0b' }
+                  ]}>
                     {selectedDeck ? 'Ready for battle' : 'Select to play'}
                   </Text>
                 </View>
-                <Text style={styles.deckSelectorArrow}>
+                <Text style={[
+                  styles.deckSelectorArrow,
+                  { color: selectedDeck ? '#22c55e' : '#f59e0b' }
+                ]}>
                   {deckMenuVisible ? '▲' : '▼'}
                 </Text>
               </Pressable>
@@ -507,9 +519,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   deckSelectorButton: {
-    backgroundColor: selectedDeck ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
     borderWidth: 1,
-    borderColor: selectedDeck ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)',
     borderRadius: 12,
     padding: spacing.md,
     flexDirection: 'row',
@@ -528,12 +538,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   deckSelectorStatus: {
-    color: selectedDeck ? '#22c55e' : '#f59e0b',
     fontSize: 12,
     marginTop: 2,
   },
   deckSelectorArrow: {
-    color: selectedDeck ? '#22c55e' : '#f59e0b',
     fontSize: 16,
     fontWeight: '600',
   },
