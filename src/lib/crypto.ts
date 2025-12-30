@@ -147,6 +147,7 @@ export const DUCAT_PACKAGES = [
 
 /**
  * Create a USDC transfer transaction
+ * Note: If connection is null, blockhash will not be set - Phantom will add it
  */
 export async function createUsdcTransferTransaction(
   senderPublicKey: any,
@@ -178,10 +179,64 @@ export async function createUsdcTransferTransaction(
   // Create transaction
   const transaction = new Transaction().add(transferInstruction);
 
-  // Get latest blockhash
-  const { blockhash } = await connection.getLatestBlockhash();
-  transaction.recentBlockhash = blockhash;
+  // Set fee payer
   transaction.feePayer = senderPublicKey;
+
+  // Get latest blockhash if connection is available
+  // Otherwise, Phantom will add it when signing
+  if (connection) {
+    try {
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+    } catch (error) {
+      console.warn('Failed to get blockhash, Phantom will add it:', error);
+      // Phantom can handle transactions without blockhash
+    }
+  }
+
+  return transaction;
+}
+
+/**
+ * Create a SOL transfer transaction
+ * Uses SystemProgram.transfer for native SOL
+ */
+export async function createSolTransferTransaction(
+  senderPublicKey: any,
+  ducats: number,
+  solPriceUsd: number,
+  connection: any
+): Promise<any> {
+  await loadSolanaLibs();
+  
+  // Also import SystemProgram and LAMPORTS_PER_SOL
+  const { SystemProgram, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
+
+  const lamports = calculateSolAmount(ducats, solPriceUsd);
+  const receiver = await getReceiverWallet();
+
+  // Create SOL transfer instruction
+  const transferInstruction = SystemProgram.transfer({
+    fromPubkey: senderPublicKey,
+    toPubkey: receiver,
+    lamports: lamports,
+  });
+
+  // Create transaction
+  const transaction = new Transaction().add(transferInstruction);
+
+  // Set fee payer
+  transaction.feePayer = senderPublicKey;
+
+  // Get latest blockhash if connection is available
+  if (connection) {
+    try {
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+    } catch (error) {
+      console.warn('Failed to get blockhash, Phantom will add it:', error);
+    }
+  }
 
   return transaction;
 }
