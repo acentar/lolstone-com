@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { Text, Card, Button, TextInput, Chip, Divider, ProgressBar } from 'react-native-paper';
+import { Text, Card, Button, TextInput, Chip, Divider, ProgressBar, IconButton, Menu } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { CardDesign } from '../../src/types/database';
 import { adminColors, adminSpacing, adminRadius } from '../../src/constants/adminTheme';
+import DeleteConfirmModal from '../../src/components/DeleteConfirmModal';
 
 const RARITY_COLORS: Record<string, string> = {
   common: adminColors.common,
@@ -15,6 +17,7 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export default function MintScreen() {
+  const router = useRouter();
   const { gameMaster } = useAuthContext();
   const [designs, setDesigns] = useState<CardDesign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +25,71 @@ export default function MintScreen() {
   const [selectedDesign, setSelectedDesign] = useState<CardDesign | null>(null);
   const [mintAmount, setMintAmount] = useState('10');
   const [minting, setMinting] = useState(false);
+  const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [designToDelete, setDesignToDelete] = useState<CardDesign | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleEditDesign = (design: CardDesign) => {
+    setMenuVisible(null);
+    router.push(`/gmp/cards/edit?id=${design.id}`);
+  };
+
+  const handleDeleteDesign = (design: CardDesign) => {
+    setMenuVisible(null);
+    setDesignToDelete(design);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!designToDelete) return;
+    
+    setDeleting(true);
+    try {
+      // Get all card instances for this design
+      const { data: instances } = await supabase
+        .from('card_instances')
+        .select('id')
+        .eq('design_id', designToDelete.id);
+      
+      if (instances && instances.length > 0) {
+        const instanceIds = instances.map(i => i.id);
+        
+        // Delete deck_cards that reference these instances
+        await supabase
+          .from('deck_cards')
+          .delete()
+          .in('card_instance_id', instanceIds);
+        
+        // Delete the card instances
+        await supabase
+          .from('card_instances')
+          .delete()
+          .eq('design_id', designToDelete.id);
+      }
+      
+      // Delete related design data
+      await supabase.from('card_keywords').delete().eq('card_design_id', designToDelete.id);
+      await supabase.from('card_effects').delete().eq('card_design_id', designToDelete.id);
+      
+      // Delete card design
+      const { error } = await supabase
+        .from('card_designs')
+        .delete()
+        .eq('id', designToDelete.id);
+      
+      if (error) throw error;
+      
+      setDesigns(prev => prev.filter(d => d.id !== designToDelete.id));
+      setDeleteModalVisible(false);
+      setDesignToDelete(null);
+    } catch (error) {
+      console.error('Error deleting design:', error);
+      Alert.alert('Error', 'Failed to delete design');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const fetchDesigns = async () => {
     try {
@@ -230,7 +298,33 @@ export default function MintScreen() {
                   >
                     <View style={[styles.designRarityBar, { backgroundColor: RARITY_COLORS[design.rarity] }]} />
                     <Card.Content style={styles.designContent}>
-                      <Text style={styles.designName} numberOfLines={1}>{design.name}</Text>
+                      <View style={styles.designHeader}>
+                        <Text style={styles.designName} numberOfLines={1}>{design.name}</Text>
+                        <Menu
+                          visible={menuVisible === design.id}
+                          onDismiss={() => setMenuVisible(null)}
+                          anchor={
+                            <IconButton
+                              icon="dots-vertical"
+                              size={18}
+                              onPress={() => setMenuVisible(design.id)}
+                              style={styles.menuButton}
+                            />
+                          }
+                        >
+                          <Menu.Item
+                            onPress={() => handleEditDesign(design)}
+                            title="Edit"
+                            leadingIcon="pencil"
+                          />
+                          <Menu.Item
+                            onPress={() => handleDeleteDesign(design)}
+                            title="Delete"
+                            leadingIcon="delete"
+                            titleStyle={{ color: '#ef4444' }}
+                          />
+                        </Menu>
+                      </View>
                       <Text style={styles.designType}>{design.card_type.replace('_', ' ')}</Text>
                       <View style={styles.designStats}>
                         <Text style={styles.designMinted}>{design.total_minted} minted</Text>
@@ -253,6 +347,19 @@ export default function MintScreen() {
           )}
         </>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        visible={deleteModalVisible}
+        onClose={() => {
+          setDeleteModalVisible(false);
+          setDesignToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        itemName={designToDelete?.name || ''}
+        itemType="Card Design"
+        loading={deleting}
+      />
     </ScrollView>
   );
 }
@@ -335,11 +442,20 @@ const styles = StyleSheet.create({
   designContent: {
     padding: adminSpacing.md,
   },
+  designHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginRight: -8,
+  },
+  menuButton: {
+    margin: -4,
+  },
   designName: {
     fontSize: 15,
     fontWeight: '600',
     color: adminColors.textPrimary,
-    marginBottom: 4,
+    flex: 1,
   },
   designType: {
     fontSize: 12,

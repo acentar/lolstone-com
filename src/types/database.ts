@@ -10,6 +10,8 @@ export type CardCategory = 'unit' | 'action';
 
 export type CardKeyword = 'frontline' | 'quick' | 'evasion' | 'boost';
 
+export type TokenTrigger = 'on_play' | 'on_destroy' | 'on_attack' | 'on_damaged';
+
 export type EffectTrigger = 
   | 'on_play' 
   | 'on_destroy' 
@@ -41,7 +43,8 @@ export type EffectAction =
   | 'summon' 
   | 'silence' 
   | 'return_hand' 
-  | 'copy';
+  | 'copy'
+  | 'stun';
 
 export interface Database {
   public: {
@@ -111,6 +114,8 @@ export interface Database {
           description: string | null;
           ability_text: string | null;
           flavor_text: string | null;
+          balance_notes: string | null;
+          inspiration: string | null;
           mana_cost: number;
           attack: number | null;
           health: number | null;
@@ -126,6 +131,15 @@ export interface Database {
           created_at: string;
           updated_at: string;
           is_active: boolean;
+          // Token fields
+          has_token: boolean;
+          token_name: string | null;
+          token_image_url: string | null;
+          token_attack: number;
+          token_health: number;
+          token_trigger: string | null;
+          token_count: number;
+          token_max_summons: number;
         };
         Insert: {
           id?: string;
@@ -133,6 +147,8 @@ export interface Database {
           description?: string | null;
           ability_text?: string | null;
           flavor_text?: string | null;
+          balance_notes?: string | null;
+          inspiration?: string | null;
           mana_cost: number;
           attack?: number | null;
           health?: number | null;
@@ -148,6 +164,15 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           is_active?: boolean;
+          // Token fields
+          has_token?: boolean;
+          token_name?: string | null;
+          token_image_url?: string | null;
+          token_attack?: number;
+          token_health?: number;
+          token_trigger?: string | null;
+          token_count?: number;
+          token_max_summons?: number;
         };
         Update: {
           id?: string;
@@ -155,6 +180,8 @@ export interface Database {
           description?: string | null;
           ability_text?: string | null;
           flavor_text?: string | null;
+          balance_notes?: string | null;
+          inspiration?: string | null;
           mana_cost?: number;
           attack?: number | null;
           health?: number | null;
@@ -170,6 +197,15 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           is_active?: boolean;
+          // Token fields
+          has_token?: boolean;
+          token_name?: string | null;
+          token_image_url?: string | null;
+          token_attack?: number;
+          token_health?: number;
+          token_trigger?: string | null;
+          token_count?: number;
+          token_max_summons?: number;
         };
       };
       card_effects: {
@@ -428,6 +464,7 @@ export const ACTION_INFO: Record<EffectAction, { name: string; icon: string }> =
   silence: { name: 'Silence', icon: '🤐' },
   return_hand: { name: 'Return to Hand', icon: '↩️' },
   copy: { name: 'Copy', icon: '📋' },
+  stun: { name: 'Stun', icon: '🥶' },
 };
 
 // Target display info
@@ -443,5 +480,29 @@ export const TARGET_INFO: Record<EffectTarget, { name: string }> = {
   all_units: { name: 'All Units' },
   random_enemy: { name: 'Random Enemy' },
   random_friendly: { name: 'Random Friendly' },
+};
+
+// Token trigger display info
+export const TOKEN_TRIGGER_INFO: Record<TokenTrigger, { name: string; icon: string; description: string }> = {
+  on_play: { 
+    name: 'On Play', 
+    icon: '▶️',
+    description: 'Summon tokens when this card is played'
+  },
+  on_destroy: { 
+    name: 'On Destroy', 
+    icon: '💀',
+    description: 'Summon tokens when this unit is destroyed'
+  },
+  on_attack: { 
+    name: 'On Attack', 
+    icon: '⚔️',
+    description: 'Summon a token when this unit attacks (limited uses)'
+  },
+  on_damaged: { 
+    name: 'On Damaged', 
+    icon: '💔',
+    description: 'Summon a token when this unit takes damage (limited uses)'
+  },
 };
 

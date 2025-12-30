@@ -50,6 +50,7 @@ export interface UnitInPlay {
   canAttack: boolean;            // Has attack available this turn
   hasSummoningSickness: boolean; // Can't attack the turn it's played (unless Quick)
   isSilenced: boolean;           // Keywords/effects disabled
+  isStunned: boolean;            // Cannot attack next turn (from stun effect)
   
   // Buffs (for display/tracking)
   attackBuff: number;

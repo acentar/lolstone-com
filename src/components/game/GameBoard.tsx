@@ -30,6 +30,7 @@ interface GameBoardProps {
   onAttackTarget?: (targetId: string) => void;
   onAttackFace?: () => void;
   canAttackFace?: boolean;
+  onUnitLongPress?: (unitId: string) => void;
 }
 
 export default function GameBoard({
@@ -43,6 +44,7 @@ export default function GameBoard({
   onAttackTarget,
   onAttackFace,
   canAttackFace = false,
+  onUnitLongPress,
 }: GameBoardProps) {
   const isPlayerTurn = activePlayerId === playerId;
 
@@ -83,6 +85,7 @@ export default function GameBoard({
             isAttacking={isAttacking}
             onSelect={() => onSelectUnit?.(unit.id)}
             onAttackTarget={() => onAttackTarget?.(unit.id)}
+            onLongPress={() => onUnitLongPress?.(unit.id)}
           />
         )}
       </View>

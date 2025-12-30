@@ -87,41 +87,69 @@ export default function GamePlayScreen() {
   const initializeGame = async (room: GameRoom) => {
     if (!player) return;
 
-    // Load player decks
-    const [player1Deck, player2Deck] = await Promise.all([
-      loadDeckCards(room.player1_deck_id),
-      loadDeckCards(room.player2_deck_id),
-    ]);
+    try {
+      // Load player decks
+      const [player1Deck, player2Deck] = await Promise.all([
+        loadDeckCards(room.player1_deck_id),
+        loadDeckCards(room.player2_deck_id),
+      ]);
 
-    // Get player names
-    const [player1Data, player2Data] = await Promise.all([
-      supabase.from('players').select('name').eq('id', room.player1_id).single(),
-      supabase.from('players').select('name').eq('id', room.player2_id).single(),
-    ]);
+      // Validate decks
+      if (player1Deck.length === 0) {
+        throw new Error('Player 1 deck is empty');
+      }
+      if (player2Deck.length === 0) {
+        throw new Error('Player 2 deck is empty');
+      }
 
-    // Create game state
-    const gameState = createGame({
-      gameId: room.id,
-      player1Id: room.player1_id,
-      player1Name: player1Data.data?.name || 'Player 1',
-      player1Deck: player1Deck,
-      player2Id: room.player2_id,
-      player2Name: player2Data.data?.name || 'Player 2',
-      player2Deck: player2Deck,
-    });
+      // Get player data (name and avatar)
+      const [player1Data, player2Data] = await Promise.all([
+        supabase.from('players').select('name, avatar_url').eq('id', room.player1_id).single(),
+        supabase.from('players').select('name, avatar_url').eq('id', room.player2_id).single(),
+      ]);
 
-    // Save initial state to database
-    await matchmakingService.updateGameState(room.id, gameState, 'playing');
+      if (player1Data.error) {
+        console.error('Error loading player1:', player1Data.error);
+        throw new Error('Failed to load player 1 data');
+      }
+      if (player2Data.error) {
+        console.error('Error loading player2:', player2Data.error);
+        throw new Error('Failed to load player 2 data');
+      }
 
-    // Create game instance
-    const instance = new GameInstance(gameState);
-    
-    // Subscribe to state changes to sync with database
-    instance.subscribe(async (newState) => {
-      await matchmakingService.updateGameState(room.id, newState);
-    });
+      // Create game state
+      const gameState = createGame({
+        gameId: room.id,
+        player1Id: room.player1_id,
+        player1Name: player1Data.data?.name || 'Player 1',
+        player1AvatarUrl: player1Data.data?.avatar_url || undefined,
+        player1Deck: player1Deck,
+        player2Id: room.player2_id,
+        player2Name: player2Data.data?.name || 'Player 2',
+        player2AvatarUrl: player2Data.data?.avatar_url || undefined,
+        player2Deck: player2Deck,
+      });
 
-    setGameInstance(instance);
+      // Save initial state to database
+      const saved = await matchmakingService.updateGameState(room.id, gameState, 'playing');
+      if (!saved) {
+        console.warn('Failed to save initial game state, continuing anyway');
+      }
+
+      // Create game instance
+      const instance = new GameInstance(gameState);
+      
+      // Subscribe to state changes to sync with database
+      instance.subscribe(async (newState) => {
+        await matchmakingService.updateGameState(room.id, newState);
+      });
+
+      setGameInstance(instance);
+    } catch (error) {
+      console.error('Error initializing game:', error);
+      setError(error instanceof Error ? error.message : 'Failed to initialize game');
+      setLoading(false);
+    }
   };
 
   const loadDeckCards = async (deckId: string): Promise<CardInHand[]> => {
@@ -142,25 +170,61 @@ export default function GamePlayScreen() {
         `)
         .eq('deck_id', deckId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading deck cards:', error);
+        throw error;
+      }
 
-      return (data || []).map((item: any) => {
+      if (!data || data.length === 0) {
+        console.warn('Deck has no cards:', deckId);
+        return [];
+      }
+
+      const cards: CardInHand[] = [];
+      
+      for (const item of data) {
+        // Check if card_instance exists
+        if (!item.card_instances) {
+          console.warn('Card instance not found for deck_card:', item.card_instance_id);
+          continue;
+        }
+
         const instance = item.card_instances;
+        
+        // Check if design exists
+        if (!instance.card_designs) {
+          console.warn('Card design not found for instance:', instance.id);
+          continue;
+        }
+
         const design = instance.card_designs;
         
-        return {
+        // Build keywords array
+        const keywords = Array.isArray(design.card_keywords) 
+          ? design.card_keywords.map((k: any) => k.keyword)
+          : [];
+
+        // Build effects array
+        const effects = Array.isArray(design.card_effects) 
+          ? design.card_effects
+          : [];
+
+        cards.push({
           id: `hand_${instance.id}_${Math.random().toString(36).substr(2, 9)}`,
           cardInstanceId: instance.id,
           design: {
             ...design,
-            keywords: design.card_keywords?.map((k: any) => k.keyword) || [],
-            effects: design.card_effects || [],
+            keywords,
+            effects,
           } as CardDesignFull,
-        };
-      });
+        });
+      }
+
+      console.log(`Loaded ${cards.length} cards from deck ${deckId}`);
+      return cards;
     } catch (error) {
       console.error('Error loading deck:', error);
-      return [];
+      throw error; // Re-throw to let initializeGame handle it
     }
   };
 

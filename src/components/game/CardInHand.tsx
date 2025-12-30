@@ -29,6 +29,7 @@ interface CardInHandProps {
   onPlay?: (position: number) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
+  onLongPress?: () => void;
 }
 
 const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = {
@@ -49,6 +50,7 @@ export default function CardInHand({
   onPlay,
   onDragStart,
   onDragEnd,
+  onLongPress,
 }: CardInHandProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -89,7 +91,16 @@ export default function CardInHand({
       if (onSelect) runOnJS(onSelect)();
     });
 
-  const composedGesture = Gesture.Race(panGesture, tapGesture);
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(500)
+    .onEnd(() => {
+      if (onLongPress) runOnJS(onLongPress)();
+    });
+
+  const composedGesture = Gesture.Race(
+    panGesture,
+    Gesture.Simultaneous(tapGesture, longPressGesture)
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [

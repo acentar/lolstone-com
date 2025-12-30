@@ -1,13 +1,55 @@
+import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Text, Card } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthContext } from '../../src/context/AuthContext';
+import { supabase } from '../../src/lib/supabase';
 import { colors, spacing } from '../../src/constants/theme';
 
 export default function PlayerHomeScreen() {
-  const { player } = useAuthContext();
+  const { player, refreshPlayer } = useAuthContext();
   const router = useRouter();
+  const [stats, setStats] = useState({
+    cardsOwned: 0,
+    decksBuilt: 0,
+    gamesWon: 0,
+    gamesPlayed: 0,
+  });
+
+  useEffect(() => {
+    if (player?.id) {
+      loadStats();
+      refreshPlayer();
+    }
+  }, [player?.id]);
+
+  const loadStats = async () => {
+    if (!player?.id) return;
+
+    try {
+      // Get cards owned count
+      const { count: cardsCount } = await supabase
+        .from('card_instances')
+        .select('*', { count: 'exact', head: true })
+        .eq('owner_id', player.id);
+
+      // Get decks count
+      const { count: decksCount } = await supabase
+        .from('decks')
+        .select('*', { count: 'exact', head: true })
+        .eq('player_id', player.id);
+
+      setStats({
+        cardsOwned: cardsCount || 0,
+        decksBuilt: decksCount || 0,
+        gamesWon: 0, // TODO: Implement when game history is tracked
+        gamesPlayed: 0,
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
 
   return (
     <LinearGradient
@@ -49,19 +91,19 @@ export default function PlayerHomeScreen() {
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats.gamesWon}</Text>
             <Text style={styles.statLabel}>Games Won</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats.gamesPlayed}</Text>
             <Text style={styles.statLabel}>Games Played</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats.cardsOwned}</Text>
             <Text style={styles.statLabel}>Cards Owned</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats.decksBuilt}</Text>
             <Text style={styles.statLabel}>Decks Built</Text>
           </View>
         </View>
@@ -70,11 +112,19 @@ export default function PlayerHomeScreen() {
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsRow}>
           <Pressable
+            style={[styles.actionCard, styles.shopCard]}
+            onPress={() => router.push('/player/shop')}
+          >
+            <Text style={styles.actionIcon}>🎁</Text>
+            <Text style={styles.actionText}>Buy Boosters</Text>
+          </Pressable>
+          
+          <Pressable
             style={styles.actionCard}
             onPress={() => router.push('/player/collection')}
           >
             <Text style={styles.actionIcon}>🃏</Text>
-            <Text style={styles.actionText}>View Collection</Text>
+            <Text style={styles.actionText}>Collection</Text>
           </Pressable>
           
           <Pressable
@@ -82,7 +132,7 @@ export default function PlayerHomeScreen() {
             onPress={() => router.push('/player/decks')}
           >
             <Text style={styles.actionIcon}>📚</Text>
-            <Text style={styles.actionText}>Build Deck</Text>
+            <Text style={styles.actionText}>Decks</Text>
           </Pressable>
         </View>
 
@@ -219,11 +269,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(30, 41, 59, 0.8)',
     borderRadius: 12,
-    padding: spacing.lg,
+    padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(51, 65, 85, 0.5)',
-    gap: 8,
+    gap: 6,
+  },
+  shopCard: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
   },
   actionIcon: {
     fontSize: 28,

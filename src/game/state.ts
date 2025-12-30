@@ -32,9 +32,11 @@ export interface CreateGameOptions {
   gameId?: string;
   player1Id: string;
   player1Name: string;
+  player1AvatarUrl?: string;
   player1Deck: CardInHand[];
   player2Id: string;
   player2Name: string;
+  player2AvatarUrl?: string;
   player2Deck: CardInHand[];
   turnTimeLimit?: number;
 }
@@ -57,6 +59,7 @@ export function createGame(options: CreateGameOptions): GameState {
   const player1: PlayerGameState = {
     id: options.player1Id,
     name: options.player1Name,
+    avatarUrl: options.player1AvatarUrl,
     health: GAME_CONFIG.STARTING_HEALTH,
     maxHealth: GAME_CONFIG.STARTING_HEALTH,
     bandwidth: 0,
@@ -72,6 +75,7 @@ export function createGame(options: CreateGameOptions): GameState {
   const player2: PlayerGameState = {
     id: options.player2Id,
     name: options.player2Name,
+    avatarUrl: options.player2AvatarUrl,
     health: GAME_CONFIG.STARTING_HEALTH,
     maxHealth: GAME_CONFIG.STARTING_HEALTH,
     bandwidth: 0,
@@ -139,6 +143,7 @@ export function startTurn(state: GameState): GameState {
   for (const unit of player.board) {
     unit.canAttack = true;
     unit.hasSummoningSickness = false; // Remove summoning sickness at turn start
+    unit.isStunned = false; // Clear stun at turn start
   }
   
   // Move to main phase
@@ -255,6 +260,7 @@ export function playCard(
       canAttack: hasKeyword({ ...createDummyUnit(card) } as UnitInPlay, 'quick'),
       hasSummoningSickness: !hasKeyword({ ...createDummyUnit(card) } as UnitInPlay, 'quick'),
       isSilenced: false,
+      isStunned: false,
       attackBuff: 0,
       healthBuff: 0,
       position: position ?? player.board.length,
@@ -446,6 +452,7 @@ function validateAttack(state: GameState, action: GameAction): boolean {
   if (!attacker) return false;
   if (!attacker.canAttack) return false;
   if (attacker.hasSummoningSickness) return false;
+  if (attacker.isStunned) return false;
   
   // Check target
   if (targetId === 'face') {

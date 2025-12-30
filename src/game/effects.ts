@@ -32,6 +32,7 @@ import {
   buffUnitAttack,
   buffUnitHealth,
   silenceUnit,
+  stunUnit,
 } from './combat';
 import { drawCards } from './state';
 
@@ -283,6 +284,12 @@ export function executeEffect(
       case 'copy':
         // Copy requires additional handling
         // Will be implemented with card database integration
+        break;
+      
+      case 'stun':
+        if (target.type === 'unit') {
+          newState = stunUnit(newState, target.id);
+        }
         break;
     }
   }

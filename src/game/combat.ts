@@ -371,6 +371,37 @@ export function silenceUnit(state: GameState, unitId: string): GameState {
   return newState;
 }
 
+/**
+ * Stun a unit (cannot attack next turn)
+ */
+export function stunUnit(state: GameState, unitId: string): GameState {
+  const newState = { ...state };
+  const unitData = findUnit(newState, unitId);
+  
+  if (!unitData) return state;
+  
+  const { unit } = unitData;
+  unit.isStunned = true;
+  
+  return newState;
+}
+
+/**
+ * Clear stun from all units owned by a player (called at start of their turn)
+ */
+export function clearStunForPlayer(state: GameState, playerId: string): GameState {
+  const newState = { ...state };
+  const player = playerId === newState.player1.id 
+    ? newState.player1 
+    : newState.player2;
+  
+  for (const unit of player.board) {
+    unit.isStunned = false;
+  }
+  
+  return newState;
+}
+
 // ============================================
 // TRIGGER HELPERS
 // ============================================
@@ -446,6 +477,9 @@ export function canUnitAttack(state: GameState, unitId: string): boolean {
   
   // Must not have summoning sickness
   if (unit.hasSummoningSickness) return false;
+  
+  // Must not be stunned
+  if (unit.isStunned) return false;
   
   // Must have attack > 0
   if (unit.currentAttack <= 0) return false;

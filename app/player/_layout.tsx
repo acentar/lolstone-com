@@ -24,6 +24,15 @@ export default function PlayerLayout() {
         }}
       />
       <Tabs.Screen
+        name="shop"
+        options={{
+          title: 'Shop',
+          tabBarIcon: ({ color }) => (
+            <Text style={[styles.tabIcon, { color }]}>🎁</Text>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="collection"
         options={{
           title: 'Collection',

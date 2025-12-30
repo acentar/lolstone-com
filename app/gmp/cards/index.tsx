@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Text, Card, Button, Chip, FAB, Searchbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../../src/lib/supabase';
 import { CardDesign, CardRarity, CardType, CardCategory } from '../../../src/types/database';
 import { adminColors, adminSpacing, adminRadius } from '../../../src/constants/adminTheme';
 import CardPreview from '../../../src/components/CardPreview';
+import CardDetailModal from '../../../src/components/CardDetailModal';
 
 const RARITIES: CardRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
@@ -33,6 +34,28 @@ export default function CardsListScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRarity, setFilterRarity] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [selectedCard, setSelectedCard] = useState<CardDesign | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const openCardDetail = (card: CardDesign) => {
+    setSelectedCard(card);
+    setModalVisible(true);
+  };
+
+  const closeCardDetail = () => {
+    setModalVisible(false);
+    setSelectedCard(null);
+  };
+
+  const handleEditCard = (card: CardDesign) => {
+    // Navigate to edit page (we can reuse the new page with card data)
+    router.push(`/gmp/cards/edit?id=${card.id}`);
+  };
+
+  const handleDeleteCard = (cardId: string) => {
+    // Remove from local state
+    setCards(prev => prev.filter(c => c.id !== cardId));
+  };
 
   const fetchCards = async () => {
     try {
@@ -161,22 +184,21 @@ export default function CardsListScreen() {
         ) : (
           <View style={styles.cardsGrid}>
             {filteredCards.map((card) => (
-              <Pressable 
-                key={card.id} 
-                style={styles.cardWrapper}
-                onPress={() => {/* TODO: Edit card */}}
-              >
+              <View key={card.id} style={styles.cardWrapper}>
                 <CardPreview
                   name={card.name}
                   manaCost={card.mana_cost}
                   attack={card.attack ?? 0}
                   health={card.health ?? 0}
                   rarity={card.rarity}
-                  category={(card as any).category || 'unit'}
+                  category={card.category || 'unit'}
                   abilityText={card.ability_text || ''}
                   flavorText={card.flavor_text || ''}
                   cardType={card.card_type}
+                  imageUrl={card.image_url ?? undefined}
                   scale={0.65}
+                  showCollectibleInfo={false}
+                  onPress={() => openCardDetail(card)}
                 />
                 <View style={styles.cardMeta}>
                   <Text style={styles.cardMinted}>{card.total_minted} minted</Text>
@@ -184,7 +206,7 @@ export default function CardsListScreen() {
                     <Text style={styles.cardSupply}>/ {card.max_supply}</Text>
                   )}
                 </View>
-              </Pressable>
+              </View>
             ))}
           </View>
         )}
@@ -196,6 +218,16 @@ export default function CardsListScreen() {
         style={styles.fab}
         onPress={() => router.push('/gmp/cards/new')}
         color="#fff"
+      />
+
+      {/* Card Detail Modal */}
+      <CardDetailModal
+        visible={modalVisible}
+        onClose={closeCardDetail}
+        cardDesign={selectedCard}
+        isGameMaster={true}
+        onEdit={handleEditCard}
+        onDelete={handleDeleteCard}
       />
     </View>
   );

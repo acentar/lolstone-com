@@ -132,11 +132,33 @@ export function useAuth() {
     return { error };
   }
 
+  async function refreshPlayer() {
+    if (!state.user) return;
+
+    try {
+      const { data: playerData } = await supabase
+        .from('players')
+        .select('*')
+        .eq('user_id', state.user.id)
+        .single();
+
+      if (playerData) {
+        setState(prev => ({
+          ...prev,
+          player: playerData,
+        }));
+      }
+    } catch (error) {
+      console.error('Error refreshing player:', error);
+    }
+  }
+
   return {
     ...state,
     signIn,
     signOut,
     signUp,
+    refreshPlayer,
   };
 }
 

@@ -19,7 +19,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isGMMode, setIsGMMode] = useState(true); // Default to GM login for now
   
   const { signIn } = useAuthContext();
   const router = useRouter();
@@ -72,7 +71,7 @@ export default function LoginScreen() {
             <Text style={styles.logoText}>LOLSTONE</Text>
             <View style={styles.modeBadge}>
               <Text style={styles.modeBadgeText}>
-                {isGMMode ? '⚡ GAME MASTER' : '🎮 PLAYER'}
+                ⚡ GAME MASTER
               </Text>
             </View>
           </View>
@@ -80,7 +79,7 @@ export default function LoginScreen() {
           {/* Login Form */}
           <View style={styles.formCard}>
             <Text style={styles.formTitle}>
-              {isGMMode ? 'Enter the Control Room' : 'Join the Arena'}
+              Enter the Control Room
             </Text>
 
             {error ? (
@@ -118,7 +117,7 @@ export default function LoginScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.loginButton,
-                isGMMode ? styles.loginButtonGM : styles.loginButtonPlayer,
+                styles.loginButtonGM,
                 pressed && styles.loginButtonPressed,
                 loading && styles.loginButtonDisabled,
               ]}
@@ -130,15 +129,13 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
 
-            {/* Mode Toggle */}
+            {/* Player Portal Link */}
             <Pressable
               style={styles.modeToggle}
-              onPress={() => setIsGMMode(!isGMMode)}
+              onPress={() => router.push('/auth/player')}
             >
               <Text style={styles.modeToggleText}>
-                {isGMMode 
-                  ? "I'm a player → Switch to Player Login" 
-                  : "I'm a Game Master → Switch to GM Login"}
+                I'm a player → Go to Player Portal
               </Text>
             </Pressable>
           </View>

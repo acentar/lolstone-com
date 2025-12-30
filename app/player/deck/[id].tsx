@@ -10,7 +10,7 @@ import CardPreview from '../../../src/components/CardPreview';
 import { spacing } from '../../../src/constants/theme';
 
 interface OwnedCard {
-  card_instance_id: string;
+  card_instance_ids: string[]; // All instance IDs for this design
   card_design: CardDesign;
   owned_count: number;
   in_deck_count: number;
@@ -78,16 +78,17 @@ export default function DeckBuilderScreen() {
 
       if (error) throw error;
 
-      // Group by design
+      // Group by design - store ALL instance IDs
       const cardMap = new Map<string, OwnedCard>();
       
       for (const instance of data || []) {
         const designId = instance.design_id;
         if (cardMap.has(designId)) {
+          cardMap.get(designId)!.card_instance_ids.push(instance.id);
           cardMap.get(designId)!.owned_count++;
         } else {
           cardMap.set(designId, {
-            card_instance_id: instance.id,
+            card_instance_ids: [instance.id],
             card_design: instance.card_designs as unknown as CardDesign,
             owned_count: 1,
             in_deck_count: 0,
@@ -103,47 +104,59 @@ export default function DeckBuilderScreen() {
     }
   };
 
-  const addCardToDeck = async (cardInstanceId: string) => {
+  const addCardToDeck = async (designId: string) => {
     if (deckCards.length >= 30) return;
     
-    // Check if we can add more of this card (max 2 per deck, except legendaries which are 1)
-    const card = availableCards.find(c => c.card_instance_id === cardInstanceId);
+    // Find the card design
+    const card = availableCards.find(c => c.card_design.id === designId);
     if (!card) return;
 
-    const countInDeck = deckCards.filter(id => {
-      const existingCard = availableCards.find(c => c.card_instance_id === id);
-      return existingCard?.card_design.id === card.card_design.id;
-    }).length;
+    // Count how many of this design are already in deck
+    const instancesInDeck = deckCards.filter(id => 
+      card.card_instance_ids.includes(id)
+    );
+    const countInDeck = instancesInDeck.length;
 
-    const maxCopies = card.card_design.rarity === 'legendary' ? 1 : 2;
-    if (countInDeck >= maxCopies) return;
+    // Can't add more than you own (up to 30 of same design allowed)
     if (countInDeck >= card.owned_count) return;
+
+    // Find an unused instance ID for this design
+    const unusedInstanceId = card.card_instance_ids.find(id => !deckCards.includes(id));
+    if (!unusedInstanceId) return;
 
     try {
       const { error } = await supabase
         .from('deck_cards')
         .insert({
           deck_id: deckId,
-          card_instance_id: cardInstanceId,
+          card_instance_id: unusedInstanceId,
         });
 
       if (error) throw error;
-      setDeckCards([...deckCards, cardInstanceId]);
+      setDeckCards([...deckCards, unusedInstanceId]);
     } catch (error) {
       console.error('Error adding card:', error);
     }
   };
 
-  const removeCardFromDeck = async (cardInstanceId: string) => {
+  const removeCardFromDeck = async (designId: string) => {
+    // Find the card design
+    const card = availableCards.find(c => c.card_design.id === designId);
+    if (!card) return;
+
+    // Find one instance of this design that's in the deck
+    const instanceToRemove = deckCards.find(id => card.card_instance_ids.includes(id));
+    if (!instanceToRemove) return;
+
     try {
       const { error } = await supabase
         .from('deck_cards')
         .delete()
         .eq('deck_id', deckId)
-        .eq('card_instance_id', cardInstanceId);
+        .eq('card_instance_id', instanceToRemove);
 
       if (error) throw error;
-      setDeckCards(deckCards.filter(id => id !== cardInstanceId));
+      setDeckCards(deckCards.filter(id => id !== instanceToRemove));
     } catch (error) {
       console.error('Error removing card:', error);
     }
@@ -168,12 +181,10 @@ export default function DeckBuilderScreen() {
   };
 
   // Group available cards for display
+  // Calculate how many of each design are in the deck
   const groupedCards = availableCards.map(card => ({
     ...card,
-    in_deck_count: deckCards.filter(id => {
-      const deckCard = availableCards.find(c => c.card_instance_id === id);
-      return deckCard?.card_design.id === card.card_design.id;
-    }).length,
+    in_deck_count: deckCards.filter(id => card.card_instance_ids.includes(id)).length,
   }));
 
   return (
@@ -261,16 +272,14 @@ export default function DeckBuilderScreen() {
             showsVerticalScrollIndicator={false}
           >
             {groupedCards.map((card) => {
-              const maxCopies = card.card_design.rarity === 'legendary' ? 1 : 2;
-              const canAdd = card.in_deck_count < maxCopies && 
-                            card.in_deck_count < card.owned_count &&
-                            deckCards.length < 30;
+              // Can add as many as you own (no per-card limit)
+              const canAdd = card.in_deck_count < card.owned_count && deckCards.length < 30;
 
               return (
                 <Pressable 
-                  key={card.card_instance_id} 
+                  key={card.card_design.id} 
                   style={styles.cardWrapper}
-                  onPress={() => canAdd && addCardToDeck(card.card_instance_id)}
+                  onPress={() => canAdd && addCardToDeck(card.card_design.id)}
                 >
                   <CardPreview
                     name={card.card_design.name}
@@ -290,7 +299,7 @@ export default function DeckBuilderScreen() {
                     card.in_deck_count > 0 && styles.countBadgeActive,
                   ]}>
                     <Text style={styles.countText}>
-                      {card.in_deck_count}/{Math.min(maxCopies, card.owned_count)}
+                      {card.in_deck_count}/{card.owned_count}
                     </Text>
                   </View>
 
@@ -298,7 +307,7 @@ export default function DeckBuilderScreen() {
                   {card.in_deck_count > 0 && (
                     <Pressable 
                       style={styles.removeButton}
-                      onPress={() => removeCardFromDeck(card.card_instance_id)}
+                      onPress={() => removeCardFromDeck(card.card_design.id)}
                     >
                       <Text style={styles.removeButtonText}>−</Text>
                     </Pressable>

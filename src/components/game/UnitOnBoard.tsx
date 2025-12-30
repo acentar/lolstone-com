@@ -28,6 +28,7 @@ interface UnitOnBoardProps {
   isAttacking?: boolean;
   onSelect?: () => void;
   onAttackTarget?: () => void;
+  onLongPress?: () => void;
 }
 
 const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = {
@@ -46,6 +47,7 @@ export default function UnitOnBoard({
   isAttacking = false,
   onSelect,
   onAttackTarget,
+  onLongPress,
 }: UnitOnBoardProps) {
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
@@ -72,6 +74,12 @@ export default function UnitOnBoard({
     }
   };
 
+  const handleLongPress = () => {
+    if (onLongPress) {
+      onLongPress();
+    }
+  };
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: translateY.value },
@@ -86,7 +94,7 @@ export default function UnitOnBoard({
   const isDamaged = unit.currentHealth < unit.maxHealth;
 
   return (
-    <Pressable onPress={handlePress}>
+    <Pressable onPress={handlePress} onLongPress={handleLongPress}>
       <Animated.View style={[styles.container, animatedStyle]}>
         {/* Can Attack Glow */}
         {isOwned && canAttack && (

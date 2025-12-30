@@ -17,6 +17,7 @@ interface HandProps {
   isActive: boolean;
   onPlayCard?: (cardId: string, position: number) => void;
   isHidden?: boolean; // For opponent's hand
+  onCardLongPress?: (cardId: string) => void;
 }
 
 export default function Hand({
@@ -25,6 +26,7 @@ export default function Hand({
   isActive,
   onPlayCard,
   isHidden = false,
+  onCardLongPress,
 }: HandProps) {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -77,6 +79,7 @@ export default function Hand({
             onPlay={(position) => handlePlay(card.id, position)}
             onDragStart={() => setIsDragging(true)}
             onDragEnd={() => setIsDragging(false)}
+            onLongPress={() => onCardLongPress?.(card.id)}
           />
         ))}
       </View>

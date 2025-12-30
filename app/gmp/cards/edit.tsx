@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { View, StyleSheet, ScrollView, useWindowDimensions, Pressable, Image, Alert, Platform } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, useWindowDimensions, Pressable, Image, Alert } from 'react-native';
 import { 
   Text, Button, TextInput, Chip, Divider, IconButton, Card,
-  SegmentedButtons, Switch, ActivityIndicator,
+  SegmentedButtons, ActivityIndicator, Switch,
 } from 'react-native-paper';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../../src/lib/supabase';
 import { useAuthContext } from '../../../src/context/AuthContext';
@@ -42,6 +42,7 @@ const TYPE_LABELS: Record<CardType, string> = {
 };
 
 interface EffectForm {
+  id?: string;
   trigger: EffectTrigger;
   target: EffectTarget;
   action: EffectAction;
@@ -76,41 +77,41 @@ interface CardFormData {
   tokenMaxSummons: number;
 }
 
-const initialFormData: CardFormData = {
-  name: '',
-  flavorText: '',
-  balanceNotes: '',
-  inspiration: '',
-  manaCost: 1,
-  attack: 1,
-  health: 1,
-  rarity: 'common',
-  cardType: 'meme_minion',
-  category: 'unit',
-  maxSupply: null,
-  keywords: [],
-  effects: [],
-  imageUri: null,
-  imageUrl: null,
-  // Token defaults
-  hasToken: false,
-  tokenName: '',
-  tokenImageUri: null,
-  tokenImageUrl: null,
-  tokenAttack: 1,
-  tokenHealth: 1,
-  tokenTrigger: 'on_play',
-  tokenCount: 1,
-  tokenMaxSummons: 1,
-};
-
-export default function CardDesignerPage() {
+export default function CardEditPage() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const { gameMaster } = useAuthContext();
   const { width } = useWindowDimensions();
   const isWideScreen = width >= 900;
 
-  const [formData, setFormData] = useState<CardFormData>(initialFormData);
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState<CardFormData>({
+    name: '',
+    flavorText: '',
+    balanceNotes: '',
+    inspiration: '',
+    manaCost: 1,
+    attack: 1,
+    health: 1,
+    rarity: 'common',
+    cardType: 'meme_minion',
+    category: 'unit',
+    maxSupply: null,
+    keywords: [],
+    effects: [],
+    imageUri: null,
+    imageUrl: null,
+    // Token defaults
+    hasToken: false,
+    tokenName: '',
+    tokenImageUri: null,
+    tokenImageUrl: null,
+    tokenAttack: 1,
+    tokenHealth: 1,
+    tokenTrigger: 'on_play',
+    tokenCount: 1,
+    tokenMaxSummons: 1,
+  });
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showEffectBuilder, setShowEffectBuilder] = useState(false);
@@ -121,10 +122,80 @@ export default function CardDesignerPage() {
     value: 1,
   });
 
-  // Image picker with recommended 4:3 aspect ratio for card art
+  useEffect(() => {
+    if (id) {
+      loadCard();
+    }
+  }, [id]);
+
+  const loadCard = async () => {
+    try {
+      // Load card design
+      const { data: card, error } = await supabase
+        .from('card_designs')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
+      // Load keywords
+      const { data: keywordsData } = await supabase
+        .from('card_keywords')
+        .select('keyword')
+        .eq('card_design_id', id);
+
+      // Load effects
+      const { data: effectsData } = await supabase
+        .from('card_effects')
+        .select('*')
+        .eq('card_design_id', id)
+        .order('priority');
+
+      setFormData({
+        name: card.name,
+        flavorText: card.flavor_text || '',
+        balanceNotes: card.balance_notes || '',
+        inspiration: card.inspiration || '',
+        manaCost: card.mana_cost,
+        attack: card.attack || 1,
+        health: card.health || 1,
+        rarity: card.rarity,
+        cardType: card.card_type,
+        category: card.category,
+        maxSupply: card.max_supply,
+        keywords: keywordsData?.map(k => k.keyword) || [],
+        effects: effectsData?.map(e => ({
+          id: e.id,
+          trigger: e.trigger,
+          target: e.target,
+          action: e.action,
+          value: e.value,
+        })) || [],
+        imageUri: null,
+        imageUrl: card.image_url,
+        // Token fields
+        hasToken: card.has_token || false,
+        tokenName: card.token_name || '',
+        tokenImageUri: null,
+        tokenImageUrl: card.token_image_url || null,
+        tokenAttack: card.token_attack || 1,
+        tokenHealth: card.token_health || 1,
+        tokenTrigger: (card.token_trigger as TokenTrigger) || 'on_play',
+        tokenCount: card.token_count || 1,
+        tokenMaxSummons: card.token_max_summons || 1,
+      });
+    } catch (error) {
+      console.error('Error loading card:', error);
+      Alert.alert('Error', 'Failed to load card');
+      router.back();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const pickImage = async () => {
     try {
-      // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Please grant camera roll permissions to upload images.');
@@ -134,7 +205,7 @@ export default function CardDesignerPage() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        aspect: [4, 3], // 4:3 aspect ratio for card art
+        aspect: [4, 3],
         quality: 0.8,
       });
 
@@ -152,15 +223,12 @@ export default function CardDesignerPage() {
   const uploadImage = async (uri: string) => {
     setUploadingImage(true);
     try {
-      // Generate unique filename
       const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `card_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
 
-      // Fetch the image and convert to blob
       const response = await fetch(uri);
       const blob = await response.blob();
 
-      // Upload to Supabase Storage
       const { data, error } = await supabase.storage
         .from('card-images')
         .upload(fileName, blob, {
@@ -174,7 +242,6 @@ export default function CardDesignerPage() {
         return;
       }
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('card-images')
         .getPublicUrl(data.path);
@@ -350,15 +417,16 @@ export default function CardDesignerPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.name) return;
+    if (!formData.name || !id) return;
     
     setSaving(true);
     try {
       const abilityText = generateAbilityText();
       
-      const { data: cardData, error: cardError } = await supabase
+      // Update card design
+      const { error: updateError } = await supabase
         .from('card_designs')
-        .insert({
+        .update({
           name: formData.name,
           ability_text: abilityText || null,
           flavor_text: formData.flavorText || null,
@@ -374,7 +442,6 @@ export default function CardDesignerPage() {
           category: formData.category,
           max_supply: formData.maxSupply,
           image_url: formData.imageUrl,
-          created_by: gameMaster?.id,
           // Token fields
           has_token: formData.hasToken,
           token_name: formData.hasToken ? formData.tokenName : null,
@@ -385,26 +452,27 @@ export default function CardDesignerPage() {
           token_count: formData.tokenCount,
           token_max_summons: formData.tokenMaxSummons,
         })
-        .select()
-        .single();
+        .eq('id', id);
 
-      if (cardError) throw cardError;
+      if (updateError) throw updateError;
 
-      // Insert keywords
+      // Delete existing keywords and insert new ones
+      await supabase.from('card_keywords').delete().eq('card_design_id', id);
       if (formData.keywords.length > 0) {
         await supabase.from('card_keywords').insert(
           formData.keywords.map(keyword => ({
-            card_design_id: cardData.id,
+            card_design_id: id,
             keyword,
           }))
         );
       }
 
-      // Insert effects
+      // Delete existing effects and insert new ones
+      await supabase.from('card_effects').delete().eq('card_design_id', id);
       if (formData.effects.length > 0) {
         await supabase.from('card_effects').insert(
           formData.effects.map((effect, index) => ({
-            card_design_id: cardData.id,
+            card_design_id: id,
             trigger: effect.trigger,
             target: effect.target,
             action: effect.action,
@@ -417,20 +485,29 @@ export default function CardDesignerPage() {
       router.back();
     } catch (error) {
       console.error('Error saving card:', error);
+      Alert.alert('Error', 'Failed to save changes');
     } finally {
       setSaving(false);
     }
   };
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={adminColors.accent} />
+        <Text style={styles.loadingText}>Loading card...</Text>
+      </View>
+    );
+  }
+
   const renderForm = () => (
     <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
       <View style={styles.formContent}>
-        {/* Back Button */}
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backText}>← Back to Library</Text>
         </Pressable>
 
-        <Text style={styles.pageTitle}>Design New Card</Text>
+        <Text style={styles.pageTitle}>Edit Card Design</Text>
 
         {/* Category Toggle */}
         <Text style={styles.sectionTitle}>Card Category</Text>
@@ -452,7 +529,6 @@ export default function CardDesignerPage() {
           onChangeText={(text) => setFormData({ ...formData, name: text })}
           mode="outlined"
           style={styles.input}
-          placeholder="e.g., Doge of Wall Street"
         />
 
         {/* Stats */}
@@ -518,10 +594,10 @@ export default function CardDesignerPage() {
         {/* Card Artwork */}
         <Text style={styles.sectionTitle}>Card Artwork (4:3 ratio)</Text>
         <View style={styles.imageUploadSection}>
-          {formData.imageUri ? (
+          {formData.imageUri || formData.imageUrl ? (
             <View style={styles.imagePreviewContainer}>
               <Image 
-                source={{ uri: formData.imageUri }} 
+                source={{ uri: formData.imageUri || formData.imageUrl! }} 
                 style={styles.uploadedImage}
                 resizeMode="cover"
               />
@@ -539,11 +615,6 @@ export default function CardDesignerPage() {
                   <Text style={styles.removeImageText}>Remove</Text>
                 </Pressable>
               </View>
-              {formData.imageUrl && (
-                <View style={styles.uploadedBadge}>
-                  <Text style={styles.uploadedBadgeText}>✓ Uploaded</Text>
-                </View>
-              )}
             </View>
           ) : (
             <Pressable style={styles.imageUploadButton} onPress={pickImage}>
@@ -552,7 +623,6 @@ export default function CardDesignerPage() {
               </View>
               <Text style={styles.uploadTitle}>Upload Card Art</Text>
               <Text style={styles.uploadHint}>Recommended: 400×300 or any 4:3 ratio</Text>
-              <Text style={styles.uploadHint}>Max size: 5MB</Text>
             </Pressable>
           )}
         </View>
@@ -759,10 +829,10 @@ export default function CardDesignerPage() {
                   {/* Token Image */}
                   <Text style={styles.effectLabel}>Token Image (Optional)</Text>
                   <View style={styles.tokenImageSection}>
-                    {formData.tokenImageUri ? (
+                    {formData.tokenImageUri || formData.tokenImageUrl ? (
                       <View style={styles.tokenImagePreview}>
                         <Image 
-                          source={{ uri: formData.tokenImageUri }} 
+                          source={{ uri: formData.tokenImageUri || formData.tokenImageUrl || undefined }} 
                           style={styles.tokenImage}
                           resizeMode="cover"
                         />
@@ -936,7 +1006,7 @@ export default function CardDesignerPage() {
           style={styles.saveButton}
           contentStyle={styles.saveButtonContent}
         >
-          Create Card
+          Save Changes
         </Button>
       </View>
     </ScrollView>
@@ -957,7 +1027,6 @@ export default function CardDesignerPage() {
           category={formData.category}
           abilityText={generateAbilityText()}
           flavorText={formData.flavorText}
-          keywords={formData.keywords}
           cardType={formData.cardType}
           imageUrl={formData.imageUrl || formData.imageUri || undefined}
           scale={isWideScreen ? 1.1 : 0.9}
@@ -1021,13 +1090,12 @@ export default function CardDesignerPage() {
           rarity={formData.rarity}
           category={formData.category}
           abilityText={generateAbilityText()}
-          keywords={formData.keywords}
           cardType={formData.cardType}
           imageUrl={formData.imageUrl || formData.imageUri || undefined}
           scale={0.4}
         />
         <Button mode="contained" onPress={handleSave} loading={saving} disabled={!formData.name}>
-          Create
+          Save
         </Button>
       </View>
     </View>
@@ -1038,6 +1106,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: adminColors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: adminColors.background,
+  },
+  loadingText: {
+    marginTop: 12,
+    color: adminColors.textSecondary,
   },
   splitLayout: {
     flex: 1,
@@ -1086,6 +1164,10 @@ const styles = StyleSheet.create({
     backgroundColor: adminColors.surface,
     marginBottom: adminSpacing.sm,
   },
+  balanceNotesInput: {
+    minHeight: 80,
+    backgroundColor: '#fef3c7',
+  },
   statsRow: {
     flexDirection: 'row',
     gap: adminSpacing.md,
@@ -1119,18 +1201,6 @@ const styles = StyleSheet.create({
   divider: {
     marginVertical: adminSpacing.lg,
   },
-  balanceNotesInput: {
-    minHeight: 80,
-    backgroundColor: '#fef3c7',
-  },
-  helperText: {
-    fontSize: 11,
-    color: adminColors.textMuted,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-
-  // Image Upload Section
   imageUploadSection: {
     marginTop: adminSpacing.sm,
   },
@@ -1142,7 +1212,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     padding: adminSpacing.xl,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   uploadIconContainer: {
     width: 64,
@@ -1167,7 +1236,6 @@ const styles = StyleSheet.create({
     color: adminColors.textMuted,
   },
   imagePreviewContainer: {
-    position: 'relative',
     borderRadius: adminRadius.lg,
     overflow: 'hidden',
     backgroundColor: adminColors.surface,
@@ -1177,7 +1245,6 @@ const styles = StyleSheet.create({
   uploadedImage: {
     width: '100%',
     height: 180,
-    borderRadius: adminRadius.lg,
   },
   uploadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1218,21 +1285,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 13,
   },
-  uploadedBadge: {
-    position: 'absolute',
-    top: adminSpacing.sm,
-    right: adminSpacing.sm,
-    backgroundColor: 'rgba(34, 197, 94, 0.9)',
-    paddingHorizontal: adminSpacing.sm,
-    paddingVertical: 4,
-    borderRadius: adminRadius.sm,
-  },
-  uploadedBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-
   rarityRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1348,7 +1400,7 @@ const styles = StyleSheet.create({
   addEffectButton: {
     borderStyle: 'dashed',
   },
-
+  
   // Token styles
   tokenHeader: {
     flexDirection: 'row',
@@ -1478,6 +1530,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: adminSpacing.xs,
   },
+  
   saveButton: {
     marginTop: adminSpacing.xl,
     borderRadius: adminRadius.md,
@@ -1485,8 +1538,6 @@ const styles = StyleSheet.create({
   saveButtonContent: {
     paddingVertical: adminSpacing.sm,
   },
-
-  // Preview Panel
   previewContainer: {
     flex: 1,
   },
@@ -1537,8 +1588,7 @@ const styles = StyleSheet.create({
     marginTop: adminSpacing.sm,
     textAlign: 'center',
   },
-
-  // Mobile
+  
   mobilePreviewBar: {
     flexDirection: 'row',
     alignItems: 'center',
