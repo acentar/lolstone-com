@@ -2,15 +2,25 @@ import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { 
   Text, Card, Button, TextInput, Modal, Portal, 
-  Chip, FAB, Searchbar, SegmentedButtons, IconButton,
+  Chip, FAB, Searchbar, IconButton, Switch, Divider,
+  SegmentedButtons,
 } from 'react-native-paper';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
-import { CardDesign, CardRarity, CardType } from '../../src/types/database';
+import { 
+  CardDesign, CardRarity, CardType, CardCategory, CardKeyword,
+  EffectTrigger, EffectTarget, EffectAction,
+  KEYWORD_INFO, TRIGGER_INFO, ACTION_INFO, TARGET_INFO,
+} from '../../src/types/database';
 import { adminColors, adminSpacing, adminRadius } from '../../src/constants/adminTheme';
 
 const RARITIES: CardRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const CARD_TYPES: CardType[] = ['meme_minion', 'viral_spell', 'troll_legendary', 'reaction_trap', 'copypasta_enchantment'];
+const CATEGORIES: CardCategory[] = ['unit', 'action'];
+const KEYWORDS: CardKeyword[] = ['frontline', 'quick', 'evasion', 'boost'];
+const TRIGGERS: EffectTrigger[] = ['on_play', 'on_destroy', 'on_attack', 'on_damaged', 'end_of_turn', 'start_of_turn'];
+const TARGETS: EffectTarget[] = ['self', 'friendly_unit', 'enemy_unit', 'any_unit', 'friendly_player', 'enemy_player', 'all_friendly', 'all_enemies', 'random_enemy'];
+const ACTIONS: EffectAction[] = ['damage', 'heal', 'draw', 'buff_attack', 'buff_health', 'destroy', 'silence'];
 
 const RARITY_COLORS: Record<CardRarity, string> = {
   common: adminColors.common,
@@ -28,6 +38,54 @@ const TYPE_LABELS: Record<CardType, string> = {
   copypasta_enchantment: 'Copypasta',
 };
 
+interface EffectForm {
+  trigger: EffectTrigger;
+  target: EffectTarget;
+  action: EffectAction;
+  value: number;
+  description: string;
+}
+
+interface CardFormData {
+  name: string;
+  description: string;
+  ability_text: string;
+  flavor_text: string;
+  mana_cost: number;
+  base_attack: number;
+  base_health: number;
+  rarity: CardRarity;
+  card_type: CardType;
+  category: CardCategory;
+  max_supply: number | null;
+  keywords: CardKeyword[];
+  effects: EffectForm[];
+}
+
+const initialFormData: CardFormData = {
+  name: '',
+  description: '',
+  ability_text: '',
+  flavor_text: '',
+  mana_cost: 1,
+  base_attack: 1,
+  base_health: 1,
+  rarity: 'common',
+  card_type: 'meme_minion',
+  category: 'unit',
+  max_supply: null,
+  keywords: [],
+  effects: [],
+};
+
+const initialEffect: EffectForm = {
+  trigger: 'on_play',
+  target: 'enemy_unit',
+  action: 'damage',
+  value: 1,
+  description: '',
+};
+
 export default function CardDesignerScreen() {
   const { gameMaster } = useAuthContext();
   const [cards, setCards] = useState<CardDesign[]>([]);
@@ -36,21 +94,12 @@ export default function CardDesignerScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRarity, setFilterRarity] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   
-  // Form state
-  const [formData, setFormData] = useState<Partial<CardDesign>>({
-    name: '',
-    description: '',
-    ability_text: '',
-    flavor_text: '',
-    mana_cost: 1,
-    attack: 1,
-    health: 1,
-    rarity: 'common',
-    card_type: 'meme_minion',
-    max_supply: null,
-  });
+  const [formData, setFormData] = useState<CardFormData>(initialFormData);
   const [saving, setSaving] = useState(false);
+  const [showEffectForm, setShowEffectForm] = useState(false);
+  const [currentEffect, setCurrentEffect] = useState<EffectForm>(initialEffect);
 
   const fetchCards = async () => {
     try {
@@ -78,14 +127,52 @@ export default function CardDesignerScreen() {
     
     setSaving(true);
     try {
-      const { error } = await supabase
+      // Insert card design
+      const { data: cardData, error: cardError } = await supabase
         .from('card_designs')
         .insert({
-          ...formData,
+          name: formData.name,
+          description: formData.description || null,
+          ability_text: generateAbilityText(),
+          flavor_text: formData.flavor_text || null,
+          mana_cost: formData.mana_cost,
+          attack: formData.category === 'unit' ? formData.base_attack : null,
+          health: formData.category === 'unit' ? formData.base_health : null,
+          base_attack: formData.category === 'unit' ? formData.base_attack : 0,
+          base_health: formData.category === 'unit' ? formData.base_health : 0,
+          rarity: formData.rarity,
+          card_type: formData.card_type,
+          category: formData.category,
+          max_supply: formData.max_supply,
           created_by: gameMaster?.id,
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (cardError) throw cardError;
+
+      // Insert keywords
+      if (formData.keywords.length > 0) {
+        const keywordInserts = formData.keywords.map(keyword => ({
+          card_design_id: cardData.id,
+          keyword,
+        }));
+        await supabase.from('card_keywords').insert(keywordInserts);
+      }
+
+      // Insert effects
+      if (formData.effects.length > 0) {
+        const effectInserts = formData.effects.map((effect, index) => ({
+          card_design_id: cardData.id,
+          trigger: effect.trigger,
+          target: effect.target,
+          action: effect.action,
+          value: effect.value,
+          description: effect.description || null,
+          priority: index,
+        }));
+        await supabase.from('card_effects').insert(effectInserts);
+      }
 
       setModalVisible(false);
       resetForm();
@@ -97,25 +184,92 @@ export default function CardDesignerScreen() {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      ability_text: '',
-      flavor_text: '',
-      mana_cost: 1,
-      attack: 1,
-      health: 1,
-      rarity: 'common',
-      card_type: 'meme_minion',
-      max_supply: null,
+  const generateAbilityText = (): string => {
+    const parts: string[] = [];
+    
+    // Add keywords
+    formData.keywords.forEach(kw => {
+      parts.push(KEYWORD_INFO[kw].name);
     });
+    
+    // Add effects
+    formData.effects.forEach(effect => {
+      const actionInfo = ACTION_INFO[effect.action];
+      const targetInfo = TARGET_INFO[effect.target];
+      const triggerInfo = TRIGGER_INFO[effect.trigger];
+      
+      let text = '';
+      if (effect.trigger !== 'on_play' || formData.category !== 'action') {
+        text += `${triggerInfo.name}: `;
+      }
+      
+      switch (effect.action) {
+        case 'damage':
+          text += `Deal ${effect.value} damage to ${targetInfo.name}`;
+          break;
+        case 'heal':
+          text += `Heal ${effect.value} to ${targetInfo.name}`;
+          break;
+        case 'draw':
+          text += `Draw ${effect.value} card${effect.value > 1 ? 's' : ''}`;
+          break;
+        case 'buff_attack':
+          text += `Give ${targetInfo.name} +${effect.value} Attack`;
+          break;
+        case 'buff_health':
+          text += `Give ${targetInfo.name} +${effect.value} Health`;
+          break;
+        case 'destroy':
+          text += `Destroy ${targetInfo.name}`;
+          break;
+        case 'silence':
+          text += `Silence ${targetInfo.name}`;
+          break;
+        default:
+          text += effect.description || `${actionInfo.name} ${targetInfo.name}`;
+      }
+      parts.push(text);
+    });
+    
+    return parts.join('. ') + (parts.length > 0 ? '.' : '');
+  };
+
+  const resetForm = () => {
+    setFormData(initialFormData);
+    setCurrentEffect(initialEffect);
+    setShowEffectForm(false);
+  };
+
+  const toggleKeyword = (keyword: CardKeyword) => {
+    setFormData(prev => ({
+      ...prev,
+      keywords: prev.keywords.includes(keyword)
+        ? prev.keywords.filter(k => k !== keyword)
+        : [...prev.keywords, keyword],
+    }));
+  };
+
+  const addEffect = () => {
+    setFormData(prev => ({
+      ...prev,
+      effects: [...prev.effects, currentEffect],
+    }));
+    setCurrentEffect(initialEffect);
+    setShowEffectForm(false);
+  };
+
+  const removeEffect = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      effects: prev.effects.filter((_, i) => i !== index),
+    }));
   };
 
   const filteredCards = cards.filter(card => {
     const matchesSearch = card.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRarity = filterRarity === 'all' || card.rarity === filterRarity;
-    return matchesSearch && matchesRarity;
+    const matchesCategory = filterCategory === 'all' || (card as any).category === filterCategory;
+    return matchesSearch && matchesRarity && matchesCategory;
   });
 
   const onRefresh = () => {
@@ -141,36 +295,52 @@ export default function CardDesignerScreen() {
         </View>
 
         {/* Search & Filters */}
-        <View style={styles.filtersRow}>
-          <Searchbar
-            placeholder="Search cards..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={styles.searchbar}
-            inputStyle={styles.searchInput}
-          />
-        </View>
+        <Searchbar
+          placeholder="Search cards..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchbar}
+        />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          <Chip
-            selected={filterRarity === 'all'}
-            onPress={() => setFilterRarity('all')}
-            style={styles.chip}
-          >
-            All
-          </Chip>
-          {RARITIES.map(rarity => (
+        <View style={styles.filtersRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <Chip
-              key={rarity}
-              selected={filterRarity === rarity}
-              onPress={() => setFilterRarity(rarity)}
-              style={[styles.chip, { borderColor: RARITY_COLORS[rarity] }]}
-              selectedColor={RARITY_COLORS[rarity]}
+              selected={filterCategory === 'all'}
+              onPress={() => setFilterCategory('all')}
+              style={styles.chip}
             >
-              {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
+              All Types
             </Chip>
-          ))}
-        </ScrollView>
+            <Chip
+              selected={filterCategory === 'unit'}
+              onPress={() => setFilterCategory('unit')}
+              style={styles.chip}
+              icon="sword"
+            >
+              Units
+            </Chip>
+            <Chip
+              selected={filterCategory === 'action'}
+              onPress={() => setFilterCategory('action')}
+              style={styles.chip}
+              icon="flash"
+            >
+              Actions
+            </Chip>
+            <View style={styles.filterDivider} />
+            {RARITIES.map(rarity => (
+              <Chip
+                key={rarity}
+                selected={filterRarity === rarity}
+                onPress={() => setFilterRarity(filterRarity === rarity ? 'all' : rarity)}
+                style={[styles.chip, { borderColor: RARITY_COLORS[rarity] }]}
+                selectedColor={RARITY_COLORS[rarity]}
+              >
+                {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
+              </Chip>
+            ))}
+          </ScrollView>
+        </View>
 
         {/* Cards Grid */}
         {filteredCards.length === 0 ? (
@@ -181,7 +351,7 @@ export default function CardDesignerScreen() {
                 {searchQuery ? 'No cards found' : 'No Cards Yet'}
               </Text>
               <Text style={styles.emptyText}>
-                {searchQuery ? 'Try a different search' : 'Create your first meme card design!'}
+                {searchQuery ? 'Try a different search' : 'Create your first card!'}
               </Text>
               {!searchQuery && (
                 <Button mode="contained" onPress={() => setModalVisible(true)} style={styles.emptyButton}>
@@ -197,7 +367,12 @@ export default function CardDesignerScreen() {
                 <View style={[styles.cardRarityBar, { backgroundColor: RARITY_COLORS[card.rarity] }]} />
                 <Card.Content style={styles.cardContent}>
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardName} numberOfLines={1}>{card.name}</Text>
+                    <View style={styles.cardTitleRow}>
+                      <Chip compact style={styles.categoryChip}>
+                        {(card as any).category === 'action' ? '⚡' : '⚔️'}
+                      </Chip>
+                      <Text style={styles.cardName} numberOfLines={1}>{card.name}</Text>
+                    </View>
                     <View style={styles.manaBadge}>
                       <Text style={styles.manaText}>{card.mana_cost}</Text>
                     </View>
@@ -207,7 +382,7 @@ export default function CardDesignerScreen() {
                     <Text style={styles.cardAbility} numberOfLines={2}>{card.ability_text}</Text>
                   )}
                   <View style={styles.cardFooter}>
-                    {(card.card_type === 'meme_minion' || card.card_type === 'troll_legendary') && (
+                    {(card as any).category === 'unit' && (
                       <Text style={styles.cardStats}>⚔️ {card.attack}  ❤️ {card.health}</Text>
                     )}
                     <Text style={styles.cardMinted}>{card.total_minted} minted</Text>
@@ -236,6 +411,18 @@ export default function CardDesignerScreen() {
               <IconButton icon="close" onPress={() => setModalVisible(false)} />
             </View>
 
+            {/* Category Toggle */}
+            <Text style={styles.inputLabel}>Card Type</Text>
+            <SegmentedButtons
+              value={formData.category}
+              onValueChange={(value) => setFormData({ ...formData, category: value as CardCategory })}
+              buttons={[
+                { value: 'unit', label: '⚔️ Unit', icon: 'sword' },
+                { value: 'action', label: '⚡ Action', icon: 'flash' },
+              ]}
+              style={styles.segmentedButtons}
+            />
+
             <TextInput
               label="Card Name"
               value={formData.name}
@@ -244,33 +431,48 @@ export default function CardDesignerScreen() {
               style={styles.input}
             />
 
-            <View style={styles.statsRow}>
+            {/* Stats (only for units) */}
+            {formData.category === 'unit' && (
+              <View style={styles.statsRow}>
+                <TextInput
+                  label="Cost"
+                  value={String(formData.mana_cost)}
+                  onChangeText={(text) => setFormData({ ...formData, mana_cost: parseInt(text) || 0 })}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={[styles.input, styles.smallInput]}
+                />
+                <TextInput
+                  label="Attack"
+                  value={String(formData.base_attack)}
+                  onChangeText={(text) => setFormData({ ...formData, base_attack: parseInt(text) || 0 })}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={[styles.input, styles.smallInput]}
+                />
+                <TextInput
+                  label="Health"
+                  value={String(formData.base_health)}
+                  onChangeText={(text) => setFormData({ ...formData, base_health: parseInt(text) || 0 })}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={[styles.input, styles.smallInput]}
+                />
+              </View>
+            )}
+
+            {formData.category === 'action' && (
               <TextInput
-                label="Mana"
-                value={String(formData.mana_cost || 0)}
+                label="Bandwidth Cost"
+                value={String(formData.mana_cost)}
                 onChangeText={(text) => setFormData({ ...formData, mana_cost: parseInt(text) || 0 })}
                 mode="outlined"
                 keyboardType="numeric"
-                style={[styles.input, styles.smallInput]}
+                style={styles.input}
               />
-              <TextInput
-                label="Attack"
-                value={String(formData.attack || 0)}
-                onChangeText={(text) => setFormData({ ...formData, attack: parseInt(text) || 0 })}
-                mode="outlined"
-                keyboardType="numeric"
-                style={[styles.input, styles.smallInput]}
-              />
-              <TextInput
-                label="Health"
-                value={String(formData.health || 0)}
-                onChangeText={(text) => setFormData({ ...formData, health: parseInt(text) || 0 })}
-                mode="outlined"
-                keyboardType="numeric"
-                style={[styles.input, styles.smallInput]}
-              />
-            </View>
+            )}
 
+            {/* Rarity */}
             <Text style={styles.inputLabel}>Rarity</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsScroll}>
               {RARITIES.map((rarity) => (
@@ -286,7 +488,8 @@ export default function CardDesignerScreen() {
               ))}
             </ScrollView>
 
-            <Text style={styles.inputLabel}>Card Type</Text>
+            {/* Theme Type */}
+            <Text style={styles.inputLabel}>Theme</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsScroll}>
               {CARD_TYPES.map((type) => (
                 <Chip
@@ -300,19 +503,131 @@ export default function CardDesignerScreen() {
               ))}
             </ScrollView>
 
-            <TextInput
-              label="Ability Text"
-              value={formData.ability_text || ''}
-              onChangeText={(text) => setFormData({ ...formData, ability_text: text })}
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              style={styles.input}
-            />
+            <Divider style={styles.divider} />
+
+            {/* Keywords (for units) */}
+            {formData.category === 'unit' && (
+              <>
+                <Text style={styles.inputLabel}>Keywords</Text>
+                <View style={styles.keywordsGrid}>
+                  {KEYWORDS.map((kw) => (
+                    <Chip
+                      key={kw}
+                      selected={formData.keywords.includes(kw)}
+                      onPress={() => toggleKeyword(kw)}
+                      style={styles.keywordChip}
+                      icon={() => <Text>{KEYWORD_INFO[kw].icon}</Text>}
+                    >
+                      {KEYWORD_INFO[kw].name}
+                    </Chip>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* Effects */}
+            <View style={styles.effectsSection}>
+              <View style={styles.effectsHeader}>
+                <Text style={styles.inputLabel}>Effects</Text>
+                <Button 
+                  mode="text" 
+                  compact 
+                  onPress={() => setShowEffectForm(true)}
+                  icon="plus"
+                >
+                  Add Effect
+                </Button>
+              </View>
+
+              {formData.effects.map((effect, index) => (
+                <Card key={index} style={styles.effectCard} mode="outlined">
+                  <Card.Content style={styles.effectCardContent}>
+                    <View style={styles.effectInfo}>
+                      <Text style={styles.effectTrigger}>
+                        {TRIGGER_INFO[effect.trigger].icon} {TRIGGER_INFO[effect.trigger].name}
+                      </Text>
+                      <Text style={styles.effectDesc}>
+                        {ACTION_INFO[effect.action].icon} {ACTION_INFO[effect.action].name} ({effect.value}) → {TARGET_INFO[effect.target].name}
+                      </Text>
+                    </View>
+                    <IconButton icon="close" size={16} onPress={() => removeEffect(index)} />
+                  </Card.Content>
+                </Card>
+              ))}
+
+              {showEffectForm && (
+                <Card style={styles.effectFormCard} mode="outlined">
+                  <Card.Content>
+                    <Text style={styles.effectFormTitle}>New Effect</Text>
+                    
+                    <Text style={styles.effectLabel}>Trigger</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {TRIGGERS.map((trigger) => (
+                        <Chip
+                          key={trigger}
+                          selected={currentEffect.trigger === trigger}
+                          onPress={() => setCurrentEffect({ ...currentEffect, trigger })}
+                          style={styles.effectChip}
+                          compact
+                        >
+                          {TRIGGER_INFO[trigger].icon} {TRIGGER_INFO[trigger].name}
+                        </Chip>
+                      ))}
+                    </ScrollView>
+
+                    <Text style={styles.effectLabel}>Action</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {ACTIONS.map((action) => (
+                        <Chip
+                          key={action}
+                          selected={currentEffect.action === action}
+                          onPress={() => setCurrentEffect({ ...currentEffect, action })}
+                          style={styles.effectChip}
+                          compact
+                        >
+                          {ACTION_INFO[action].icon} {ACTION_INFO[action].name}
+                        </Chip>
+                      ))}
+                    </ScrollView>
+
+                    <Text style={styles.effectLabel}>Target</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {TARGETS.map((target) => (
+                        <Chip
+                          key={target}
+                          selected={currentEffect.target === target}
+                          onPress={() => setCurrentEffect({ ...currentEffect, target })}
+                          style={styles.effectChip}
+                          compact
+                        >
+                          {TARGET_INFO[target].name}
+                        </Chip>
+                      ))}
+                    </ScrollView>
+
+                    <TextInput
+                      label="Value"
+                      value={String(currentEffect.value)}
+                      onChangeText={(text) => setCurrentEffect({ ...currentEffect, value: parseInt(text) || 0 })}
+                      mode="outlined"
+                      keyboardType="numeric"
+                      style={styles.effectValueInput}
+                    />
+
+                    <View style={styles.effectFormActions}>
+                      <Button mode="outlined" onPress={() => setShowEffectForm(false)}>Cancel</Button>
+                      <Button mode="contained" onPress={addEffect}>Add Effect</Button>
+                    </View>
+                  </Card.Content>
+                </Card>
+              )}
+            </View>
+
+            <Divider style={styles.divider} />
 
             <TextInput
-              label="Flavor Text"
-              value={formData.flavor_text || ''}
+              label="Flavor Text (optional)"
+              value={formData.flavor_text}
               onChangeText={(text) => setFormData({ ...formData, flavor_text: text })}
               mode="outlined"
               style={styles.input}
@@ -328,6 +643,14 @@ export default function CardDesignerScreen() {
               style={styles.input}
               placeholder="Leave empty for unlimited"
             />
+
+            {/* Preview */}
+            <Card style={styles.previewCard} mode="outlined">
+              <Card.Content>
+                <Text style={styles.previewTitle}>Preview</Text>
+                <Text style={styles.previewAbility}>{generateAbilityText() || 'No abilities'}</Text>
+              </Card.Content>
+            </Card>
 
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setModalVisible(false)} style={styles.cancelButton}>
@@ -379,24 +702,24 @@ const styles = StyleSheet.create({
   },
 
   // Filters
-  filtersRow: {
-    marginBottom: adminSpacing.sm,
-  },
   searchbar: {
     backgroundColor: adminColors.surface,
     borderRadius: adminRadius.md,
+    marginBottom: adminSpacing.md,
     elevation: 0,
     borderWidth: 1,
     borderColor: adminColors.border,
   },
-  searchInput: {
-    fontSize: 14,
-  },
-  chipRow: {
+  filtersRow: {
     marginBottom: adminSpacing.lg,
   },
   chip: {
     marginRight: adminSpacing.sm,
+  },
+  filterDivider: {
+    width: 1,
+    backgroundColor: adminColors.border,
+    marginHorizontal: adminSpacing.sm,
   },
 
   // Empty State
@@ -455,8 +778,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: adminSpacing.xs,
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  categoryChip: {
+    marginRight: adminSpacing.xs,
+    height: 24,
+  },
   cardName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: adminColors.textPrimary,
     flex: 1,
@@ -513,7 +845,7 @@ const styles = StyleSheet.create({
   // Modal
   modal: {
     backgroundColor: adminColors.surface,
-    margin: adminSpacing.lg,
+    margin: adminSpacing.md,
     padding: adminSpacing.lg,
     borderRadius: adminRadius.lg,
     maxHeight: '90%',
@@ -528,6 +860,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: adminColors.textPrimary,
+  },
+  segmentedButtons: {
+    marginBottom: adminSpacing.md,
   },
   input: {
     marginBottom: adminSpacing.md,
@@ -552,6 +887,99 @@ const styles = StyleSheet.create({
   optionChip: {
     marginRight: adminSpacing.sm,
   },
+  divider: {
+    marginVertical: adminSpacing.lg,
+  },
+  keywordsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: adminSpacing.sm,
+    marginBottom: adminSpacing.md,
+  },
+  keywordChip: {
+    marginBottom: adminSpacing.xs,
+  },
+
+  // Effects
+  effectsSection: {
+    marginBottom: adminSpacing.md,
+  },
+  effectsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: adminSpacing.sm,
+  },
+  effectCard: {
+    marginBottom: adminSpacing.sm,
+    borderColor: adminColors.border,
+  },
+  effectCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: adminSpacing.xs,
+  },
+  effectInfo: {
+    flex: 1,
+  },
+  effectTrigger: {
+    fontSize: 12,
+    color: adminColors.accent,
+    fontWeight: '600',
+  },
+  effectDesc: {
+    fontSize: 13,
+    color: adminColors.textPrimary,
+    marginTop: 2,
+  },
+  effectFormCard: {
+    borderColor: adminColors.accent,
+    backgroundColor: adminColors.accentLight,
+  },
+  effectFormTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.md,
+  },
+  effectLabel: {
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    marginTop: adminSpacing.sm,
+    marginBottom: adminSpacing.xs,
+  },
+  effectChip: {
+    marginRight: adminSpacing.xs,
+    marginBottom: adminSpacing.xs,
+  },
+  effectValueInput: {
+    marginTop: adminSpacing.md,
+    backgroundColor: adminColors.surface,
+  },
+  effectFormActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: adminSpacing.sm,
+    marginTop: adminSpacing.md,
+  },
+
+  // Preview
+  previewCard: {
+    marginBottom: adminSpacing.lg,
+    borderColor: adminColors.border,
+    backgroundColor: adminColors.surfaceVariant,
+  },
+  previewTitle: {
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    marginBottom: adminSpacing.xs,
+  },
+  previewAbility: {
+    fontSize: 14,
+    color: adminColors.textPrimary,
+    fontStyle: 'italic',
+  },
+
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

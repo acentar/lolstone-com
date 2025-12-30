@@ -5,6 +5,44 @@ export type CardRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type CardType = 'meme_minion' | 'viral_spell' | 'troll_legendary' | 'reaction_trap' | 'copypasta_enchantment';
 export type TransactionType = 'mint' | 'grant_ducats' | 'purchase' | 'reward' | 'trade';
 
+// Game mechanics types
+export type CardCategory = 'unit' | 'action';
+
+export type CardKeyword = 'frontline' | 'quick' | 'evasion' | 'boost';
+
+export type EffectTrigger = 
+  | 'on_play' 
+  | 'on_destroy' 
+  | 'on_attack' 
+  | 'on_damaged' 
+  | 'end_of_turn' 
+  | 'start_of_turn';
+
+export type EffectTarget = 
+  | 'self' 
+  | 'friendly_unit' 
+  | 'enemy_unit' 
+  | 'any_unit' 
+  | 'friendly_player' 
+  | 'enemy_player' 
+  | 'all_friendly' 
+  | 'all_enemies' 
+  | 'all_units' 
+  | 'random_enemy' 
+  | 'random_friendly';
+
+export type EffectAction = 
+  | 'damage' 
+  | 'heal' 
+  | 'draw' 
+  | 'buff_attack' 
+  | 'buff_health' 
+  | 'destroy' 
+  | 'summon' 
+  | 'silence' 
+  | 'return_hand' 
+  | 'copy';
+
 export interface Database {
   public: {
     Tables: {
@@ -76,8 +114,11 @@ export interface Database {
           mana_cost: number;
           attack: number | null;
           health: number | null;
+          base_attack: number;
+          base_health: number;
           rarity: CardRarity;
           card_type: CardType;
+          category: CardCategory;
           image_url: string | null;
           max_supply: number | null;
           total_minted: number;
@@ -95,8 +136,11 @@ export interface Database {
           mana_cost: number;
           attack?: number | null;
           health?: number | null;
+          base_attack?: number;
+          base_health?: number;
           rarity?: CardRarity;
           card_type?: CardType;
+          category?: CardCategory;
           image_url?: string | null;
           max_supply?: number | null;
           total_minted?: number;
@@ -114,8 +158,11 @@ export interface Database {
           mana_cost?: number;
           attack?: number | null;
           health?: number | null;
+          base_attack?: number;
+          base_health?: number;
           rarity?: CardRarity;
           card_type?: CardType;
+          category?: CardCategory;
           image_url?: string | null;
           max_supply?: number | null;
           total_minted?: number;
@@ -123,6 +170,61 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           is_active?: boolean;
+        };
+      };
+      card_effects: {
+        Row: {
+          id: string;
+          card_design_id: string;
+          trigger: EffectTrigger;
+          target: EffectTarget;
+          action: EffectAction;
+          value: number;
+          summon_card_id: string | null;
+          description: string | null;
+          priority: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          card_design_id: string;
+          trigger: EffectTrigger;
+          target: EffectTarget;
+          action: EffectAction;
+          value?: number;
+          summon_card_id?: string | null;
+          description?: string | null;
+          priority?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          card_design_id?: string;
+          trigger?: EffectTrigger;
+          target?: EffectTarget;
+          action?: EffectAction;
+          value?: number;
+          summon_card_id?: string | null;
+          description?: string | null;
+          priority?: number;
+          created_at?: string;
+        };
+      };
+      card_keywords: {
+        Row: {
+          id: string;
+          card_design_id: string;
+          keyword: CardKeyword;
+        };
+        Insert: {
+          id?: string;
+          card_design_id: string;
+          keyword: CardKeyword;
+        };
+        Update: {
+          id?: string;
+          card_design_id?: string;
+          keyword?: CardKeyword;
         };
       };
       card_instances: {
@@ -266,9 +368,80 @@ export type CardInstance = Database['public']['Tables']['card_instances']['Row']
 export type Transaction = Database['public']['Tables']['transactions']['Row'];
 export type Deck = Database['public']['Tables']['decks']['Row'];
 export type DeckCard = Database['public']['Tables']['deck_cards']['Row'];
+export type CardEffect = Database['public']['Tables']['card_effects']['Row'];
+export type CardKeywordRow = Database['public']['Tables']['card_keywords']['Row'];
 
 // Card instance with design info (for display)
 export type CardInstanceWithDesign = CardInstance & {
   card_designs: CardDesign;
+};
+
+// Full card design with keywords and effects (from view or joined query)
+export interface CardDesignFull extends CardDesign {
+  keywords: CardKeyword[];
+  effects: CardEffect[];
+}
+
+// Keyword display info
+export const KEYWORD_INFO: Record<CardKeyword, { name: string; description: string; icon: string }> = {
+  frontline: {
+    name: 'Frontline',
+    description: 'Enemies must attack this unit first',
+    icon: '🛡️',
+  },
+  quick: {
+    name: 'Quick',
+    description: 'Can attack immediately when played',
+    icon: '⚡',
+  },
+  evasion: {
+    name: 'Evasion',
+    description: 'Cannot be targeted by actions',
+    icon: '💨',
+  },
+  boost: {
+    name: 'Boost',
+    description: '+1 Attack and +1 Health',
+    icon: '💪',
+  },
+};
+
+// Effect trigger display info
+export const TRIGGER_INFO: Record<EffectTrigger, { name: string; icon: string }> = {
+  on_play: { name: 'On Play', icon: '▶️' },
+  on_destroy: { name: 'On Destroy', icon: '💀' },
+  on_attack: { name: 'On Attack', icon: '⚔️' },
+  on_damaged: { name: 'On Damaged', icon: '💔' },
+  end_of_turn: { name: 'End of Turn', icon: '🔚' },
+  start_of_turn: { name: 'Start of Turn', icon: '🔛' },
+};
+
+// Effect action display info
+export const ACTION_INFO: Record<EffectAction, { name: string; icon: string }> = {
+  damage: { name: 'Deal Damage', icon: '💥' },
+  heal: { name: 'Heal', icon: '❤️‍🩹' },
+  draw: { name: 'Draw Cards', icon: '🃏' },
+  buff_attack: { name: 'Buff Attack', icon: '⚔️' },
+  buff_health: { name: 'Buff Health', icon: '❤️' },
+  destroy: { name: 'Destroy', icon: '☠️' },
+  summon: { name: 'Summon', icon: '✨' },
+  silence: { name: 'Silence', icon: '🤐' },
+  return_hand: { name: 'Return to Hand', icon: '↩️' },
+  copy: { name: 'Copy', icon: '📋' },
+};
+
+// Target display info
+export const TARGET_INFO: Record<EffectTarget, { name: string }> = {
+  self: { name: 'This Unit' },
+  friendly_unit: { name: 'Friendly Unit' },
+  enemy_unit: { name: 'Enemy Unit' },
+  any_unit: { name: 'Any Unit' },
+  friendly_player: { name: 'Your Hero' },
+  enemy_player: { name: 'Enemy Hero' },
+  all_friendly: { name: 'All Friendly Units' },
+  all_enemies: { name: 'All Enemy Units' },
+  all_units: { name: 'All Units' },
+  random_enemy: { name: 'Random Enemy' },
+  random_friendly: { name: 'Random Friendly' },
 };
 
