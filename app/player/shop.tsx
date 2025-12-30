@@ -40,9 +40,9 @@ export default function ShopScreen() {
   const [revealedCards, setRevealedCards] = useState<RevealedCard[]>([]);
   const [showCryptoPayment, setShowCryptoPayment] = useState(false);
 
-  // Debug function to test add_ducats RPC
+  // Debug function to test add_ducats (direct update)
   const testAddDucats = async () => {
-    console.log('🧪 Testing add_ducats RPC...');
+    console.log('🧪 Testing add_ducats (direct method)...');
     console.log('👤 Current user:', user);
     console.log('🔑 User ID:', user?.id);
 
@@ -53,21 +53,40 @@ export default function ShopScreen() {
     }
 
     try {
-      const { data, error } = await supabase.rpc('add_ducats', {
-        p_user_id: user.id,
-        p_amount: 10, // Test with 10 ducats
-      });
-
-      console.log('📊 Test RPC Response:', { data, error });
+      // Method 1: Direct update
+      console.log('💰 Testing direct update...');
+      const { data, error } = await supabase
+        .from('players')
+        .select('ducats, id')
+        .eq('user_id', user.id)
+        .single();
 
       if (error) {
-        Alert.alert('Test Failed', `RPC Error: ${error.message}`);
-      } else if (!data?.success) {
-        Alert.alert('Test Failed', `RPC returned: ${JSON.stringify(data)}`);
-      } else {
-        Alert.alert('Test Success', `Added 10 ducats! New balance: ${data.new_balance}`);
-        await refreshPlayer();
+        console.error('❌ Could not find player:', error);
+        Alert.alert('Test Failed', `Player lookup failed: ${error.message}`);
+        return;
       }
+
+      const currentDucats = data?.ducats || 0;
+      const newDucats = currentDucats + 10;
+
+      console.log(`🔢 Test update: ${currentDucats} → ${newDucats}`);
+
+      const { error: updateError } = await supabase
+        .from('players')
+        .update({ ducats: newDucats })
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('❌ Update failed:', updateError);
+        Alert.alert('Test Failed', `Update failed: ${updateError.message}`);
+        return;
+      }
+
+      console.log('✅ Direct update succeeded');
+      await refreshPlayer();
+      Alert.alert('Test Success', `Added 10 ducats! New balance: ${newDucats}`);
+
     } catch (err) {
       console.error('💥 Test error:', err);
       Alert.alert('Test Error', `Exception: ${err.message}`);
@@ -578,38 +597,50 @@ export default function ShopScreen() {
           console.log('🔑 User ID:', user?.id);
 
           try {
-            // Credit the ducats to the player via RPC
-            console.log('💰 Calling add_ducats RPC...');
-            const { data, error } = await supabase.rpc('add_ducats', {
-              p_user_id: user?.id,
-              p_amount: ducats,
-            });
-
-            console.log('📊 RPC Response:', { data, error });
+            // Method 1: Try direct update (bypass RPC)
+            console.log('💰 Attempting direct ducats update...');
+            const { data, error } = await supabase
+              .from('players')
+              .select('ducats')
+              .eq('user_id', user?.id)
+              .single();
 
             if (error) {
-              console.error('❌ RPC Error:', error);
-              Alert.alert(
-                '⚠️ Payment Received',
-                `Your payment was received (tx: ${signature.slice(0, 8)}...) but there was an issue crediting your ducats.\n\nError: ${error.message}`,
-                [{ text: 'OK' }]
-              );
-              setShowCryptoPayment(false);
-              return;
+              console.error('❌ Could not find player:', error);
+              throw new Error('Player not found');
             }
 
-            if (!data?.success) {
-              console.error('❌ RPC returned success=false:', data);
-              Alert.alert(
-                '⚠️ Payment Received',
-                `Your payment was received (tx: ${signature.slice(0, 8)}...) but ducat crediting failed.\n\nReason: ${data?.error || 'Unknown error'}`,
-                [{ text: 'OK' }]
-              );
-              setShowCryptoPayment(false);
-              return;
+            const currentDucats = data?.ducats || 0;
+            const newDucats = currentDucats + ducats;
+
+            console.log(`🔢 Updating balance: ${currentDucats} → ${newDucats}`);
+
+            const { error: updateError } = await supabase
+              .from('players')
+              .update({ ducats: newDucats })
+              .eq('user_id', user?.id);
+
+            if (updateError) {
+              console.error('❌ Update failed:', updateError);
+              throw new Error(`Update failed: ${updateError.message}`);
             }
 
-            console.log('✅ Ducats credited successfully:', data);
+            // Record the transaction
+            const { error: transactionError } = await supabase
+              .from('transactions')
+              .insert({
+                type: 'deposit',
+                to_player_id: data.id, // player.id from the select query
+                ducats_amount: ducats,
+                description: `Crypto ducat purchase - ${signature.slice(0, 8)}...`
+              });
+
+            if (transactionError) {
+              console.warn('⚠️ Transaction recording failed:', transactionError);
+              // Don't fail the whole operation for this
+            }
+
+            console.log('✅ Ducats credited successfully via direct update');
 
             // Refresh player data to get updated ducat balance
             console.log('🔄 Refreshing player data...');
@@ -620,16 +651,54 @@ export default function ShopScreen() {
 
             Alert.alert(
               '🎉 Success!',
-              `You received ${ducats.toLocaleString()} ducats!\nNew balance: ${data.new_balance}\n\nTransaction: ${signature.slice(0, 12)}...`,
+              `You received ${ducats.toLocaleString()} ducats!\nNew balance: ${newDucats}\n\nTransaction: ${signature.slice(0, 12)}...`,
               [{ text: 'Awesome!' }]
             );
           } catch (err) {
             console.error('💥 Error in onSuccess:', err);
-            Alert.alert(
-              '⚠️ Error',
-              `Payment received but failed to credit ducats.\n\nError: ${err.message}`,
-              [{ text: 'OK' }]
-            );
+
+            // Method 2: Fallback to RPC if direct update fails
+            console.log('🔄 Trying RPC fallback...');
+            try {
+              const { data: rpcData, error: rpcError } = await supabase.rpc('add_ducats', {
+                p_user_id: user?.id,
+                p_amount: ducats,
+              });
+
+              if (rpcError) {
+                console.error('❌ RPC also failed:', rpcError);
+                Alert.alert(
+                  '⚠️ Payment Received',
+                  `Your payment was received (tx: ${signature.slice(0, 8)}...) but ducat crediting failed.\n\nDirect update: ${err.message}\nRPC: ${rpcError.message}`,
+                  [{ text: 'OK' }]
+                );
+              } else if (!rpcData?.success) {
+                console.error('❌ RPC returned failure:', rpcData);
+                Alert.alert(
+                  '⚠️ Payment Received',
+                  `Your payment was received (tx: ${signature.slice(0, 8)}...) but ducat crediting failed.\n\nReason: ${rpcData?.error || 'Unknown RPC error'}`,
+                  [{ text: 'OK' }]
+                );
+              } else {
+                console.log('✅ RPC fallback succeeded:', rpcData);
+                await refreshPlayer();
+                setShowCryptoPayment(false);
+                Alert.alert(
+                  '🎉 Success!',
+                  `You received ${ducats.toLocaleString()} ducats!\nNew balance: ${rpcData.new_balance}\n\nTransaction: ${signature.slice(0, 12)}...`,
+                  [{ text: 'Awesome!' }]
+                );
+                return;
+              }
+            } catch (rpcFallbackError) {
+              console.error('❌ Both methods failed');
+              Alert.alert(
+                '⚠️ Error',
+                `Payment received but failed to credit ducats.\n\nDirect: ${err.message}\nRPC: ${rpcFallbackError.message}`,
+                [{ text: 'OK' }]
+              );
+            }
+
             setShowCryptoPayment(false);
           }
         }}
