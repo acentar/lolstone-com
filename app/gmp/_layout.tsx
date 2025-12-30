@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, StyleSheet, Pressable, useWindowDimensions, ScrollView } from 'react-native';
 import { Slot, usePathname, useRouter } from 'expo-router';
 import { PaperProvider, Text, Avatar, Divider, IconButton } from 'react-native-paper';
@@ -33,14 +33,37 @@ function NavItem({ icon, label, href, isActive, onPress, collapsed }: NavItemPro
 }
 
 export default function GMPLayout() {
-  const { gameMaster, signOut } = useAuthContext();
+  const { gameMaster, signOut, loading, user, isGameMaster } = useAuthContext();
   const pathname = usePathname();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(width < 768);
-  
+
   const isSmallScreen = width < 768;
   const sidebarWidth = sidebarCollapsed ? 72 : 240;
+
+  // Authentication protection for GMP
+  useEffect(() => {
+    if (loading) return; // Still loading auth state
+
+    // Allow access to login page
+    if (pathname === '/gmp/login') return;
+
+    // Check if user is authenticated and is a Game Master
+    if (!user) {
+      console.log('GMP: No user, redirecting to GMP login');
+      router.replace('/gmp/login');
+      return;
+    }
+
+    if (!isGameMaster) {
+      console.log('GMP: User is not Game Master, redirecting to landing');
+      router.replace('/');
+      return;
+    }
+
+    console.log('GMP: Access granted for Game Master');
+  }, [loading, user, isGameMaster, pathname, router]);
 
   const navItems = [
     { icon: '📊', label: 'Dashboard', href: '/gmp' },
