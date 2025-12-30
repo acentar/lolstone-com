@@ -118,6 +118,10 @@ export default function GamePlayScreen() {
         throw new Error('Failed to load player 2 data');
       }
 
+      // Debug: log deck sizes
+      console.log('Player 1 deck size:', player1Deck.length);
+      console.log('Player 2 deck size:', player2Deck.length);
+
       // Create game state
       const initialGameState = createGame({
         gameId: room.id,
@@ -131,16 +135,38 @@ export default function GamePlayScreen() {
         player2Deck: player2Deck,
       });
 
+      // Debug: log initial state
+      console.log('Initial game state - Player 1 hand:', initialGameState.player1.hand.length);
+      console.log('Initial game state - Player 2 hand:', initialGameState.player2.hand.length);
+      console.log('Initial game state - Player 1 deck:', initialGameState.player1.deck.length);
+      console.log('Initial game state - Player 2 deck:', initialGameState.player2.deck.length);
+      console.log('Initial game phase:', initialGameState.phase);
+
       // Create game instance
       const instance = new GameInstance(initialGameState);
       
       // Auto-complete mulligan for both players (skip mulligan phase)
       // This transitions the game from 'mulligan' to 'playing' and starts the first turn
       instance.completeMulligan(room.player1_id, []);
-      instance.completeMulligan(room.player2_id, []);
+      
+      // Debug: log after first mulligan
+      console.log('After P1 mulligan - phase:', instance.getState().phase);
+      console.log('After P1 mulligan - P1 hand:', instance.getState().player1.hand.length);
+      
+      // Only call second mulligan if still in mulligan phase (shouldn't be needed)
+      if (instance.getState().phase === 'mulligan') {
+        instance.completeMulligan(room.player2_id, []);
+      }
       
       // Get the final game state after mulligan
       const gameState = instance.getState();
+      
+      // Debug: log final state
+      console.log('Final game state - Player 1 hand:', gameState.player1.hand.length);
+      console.log('Final game state - Player 2 hand:', gameState.player2.hand.length);
+      console.log('Final game phase:', gameState.phase);
+      console.log('Active player:', gameState.activePlayerId);
+      console.log('Current turn:', gameState.currentTurn);
 
       // Save initial state to database
       const saved = await matchmakingService.updateGameState(room.id, gameState, 'playing');

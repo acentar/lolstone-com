@@ -139,6 +139,12 @@ export default function GameScreen({
   // Turn timer progress (0-1)
   const isTimerWarning = turnTimeRemaining <= 20;
 
+  // Debug: Log hand state
+  console.log('GameScreen - My hand size:', player.hand.length);
+  console.log('GameScreen - Opponent hand size:', opponent.hand.length);
+  console.log('GameScreen - Game phase:', gameState.phase);
+  console.log('GameScreen - Is my turn:', isMyTurn);
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <LinearGradient
