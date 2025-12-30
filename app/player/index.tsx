@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
-import { Text, Card } from 'react-native-paper';
+import { Text, Card, Button, Menu } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthContext } from '../../src/context/AuthContext';
@@ -21,6 +21,7 @@ export default function PlayerHomeScreen() {
   const [activeGames, setActiveGames] = useState<any[]>([]);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [disconnectedGames, setDisconnectedGames] = useState<any[]>([]);
+  const [deckMenuVisible, setDeckMenuVisible] = useState(false);
 
   // Background task to check for disconnected players and auto-declare winners
   useEffect(() => {
@@ -111,14 +112,33 @@ export default function PlayerHomeScreen() {
 
       setDecks(validDecks);
 
-      // Auto-select the active deck if available
+      // Check for saved deck preference in localStorage
+      const savedDeckId = localStorage.getItem(`lolstone_selected_deck_${player.id}`);
+      if (savedDeckId) {
+        const savedDeck = validDecks.find(d => d.id === savedDeckId);
+        if (savedDeck) {
+          setSelectedDeck(savedDeck);
+          return;
+        }
+      }
+
+      // Fallback: auto-select the active deck if available
       const activeDeck = validDecks.find(d => d.is_active);
       if (activeDeck) {
         setSelectedDeck(activeDeck);
+        // Save this choice
+        localStorage.setItem(`lolstone_selected_deck_${player.id}`, activeDeck.id);
       }
     } catch (error) {
       console.error('Error loading decks:', error);
     }
+  };
+
+  const selectDeck = (deck: Deck) => {
+    setSelectedDeck(deck);
+    setDeckMenuVisible(false);
+    // Save selection to localStorage
+    localStorage.setItem(`lolstone_selected_deck_${player?.id}`, deck.id);
   };
 
   const loadActiveGames = async () => {
@@ -204,31 +224,59 @@ export default function PlayerHomeScreen() {
         {/* Deck Selection & Active Games */}
         <View style={styles.deckAndGamesSection}>
           <View style={styles.deckSection}>
-            <Text style={styles.sectionTitle}>Selected Deck</Text>
-            {selectedDeck ? (
-              <View style={styles.selectedDeckCard}>
-                <Text style={styles.selectedDeckName}>{selectedDeck.name}</Text>
-                <Text style={styles.selectedDeckStatus}>✓ Ready for battle</Text>
-                <Pressable
-                  style={styles.changeDeckButton}
-                  onPress={() => router.push('/player/decks')}
-                >
-                  <Text style={styles.changeDeckText}>Change</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                style={styles.selectDeckCard}
-                onPress={() => router.push('/player/decks')}
+            <Text style={styles.sectionTitle}>Battle Deck</Text>
+            <View style={styles.deckSelectorContainer}>
+              <Menu
+                visible={deckMenuVisible}
+                onDismiss={() => setDeckMenuVisible(false)}
+                anchor={
+                  <Pressable
+                    style={styles.deckSelectorButton}
+                    onPress={() => setDeckMenuVisible(true)}
+                  >
+                    <Text style={styles.deckSelectorEmoji}>
+                      {selectedDeck ? '⚔️' : '📚'}
+                    </Text>
+                    <View style={styles.deckSelectorInfo}>
+                      <Text style={styles.deckSelectorLabel}>
+                        {selectedDeck ? selectedDeck.name : 'Choose a deck'}
+                      </Text>
+                      <Text style={styles.deckSelectorStatus}>
+                        {selectedDeck ? 'Ready for battle' : 'Select to play'}
+                      </Text>
+                    </View>
+                    <Text style={styles.deckSelectorArrow}>
+                      {deckMenuVisible ? '▲' : '▼'}
+                    </Text>
+                  </Pressable>
+                }
               >
-                <Text style={styles.selectDeckEmoji}>📚</Text>
-                <View style={styles.selectDeckInfo}>
-                  <Text style={styles.selectDeckTitle}>Select a Deck</Text>
-                  <Text style={styles.selectDeckSubtitle}>Choose your battle deck</Text>
-                </View>
-                <Text style={styles.selectDeckArrow}>→</Text>
-              </Pressable>
-            )}
+                {decks.length > 0 ? (
+                  decks.map((deck) => (
+                    <Menu.Item
+                      key={deck.id}
+                      title={deck.name}
+                      onPress={() => selectDeck(deck)}
+                      leadingIcon={selectedDeck?.id === deck.id ? 'check' : undefined}
+                    />
+                  ))
+                ) : (
+                  <Menu.Item
+                    title="No decks available"
+                    disabled
+                    leadingIcon="alert-circle"
+                  />
+                )}
+                <Menu.Item
+                  title="Create New Deck"
+                  onPress={() => {
+                    setDeckMenuVisible(false);
+                    router.push('/player/decks');
+                  }}
+                  leadingIcon="plus"
+                />
+              </Menu>
+            </View>
           </View>
 
           {/* Active Games */}
@@ -428,67 +476,38 @@ const styles = StyleSheet.create({
   deckSection: {
     marginBottom: spacing.md,
   },
-  selectedDeckCard: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+  deckSelectorContainer: {
+    marginTop: spacing.sm,
+  },
+  deckSelectorButton: {
+    backgroundColor: selectedDeck ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.3)',
-    borderRadius: 12,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  selectedDeckName: {
-    color: '#f8fafc',
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  selectedDeckStatus: {
-    color: '#22c55e',
-    fontSize: 12,
-    marginRight: spacing.md,
-  },
-  changeDeckButton: {
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 6,
-  },
-  changeDeckText: {
-    color: '#22c55e',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  selectDeckCard: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderColor: selectedDeck ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)',
     borderRadius: 12,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  selectDeckEmoji: {
+  deckSelectorEmoji: {
     fontSize: 24,
     marginRight: spacing.md,
   },
-  selectDeckInfo: {
+  deckSelectorInfo: {
     flex: 1,
   },
-  selectDeckTitle: {
-    color: '#f59e0b',
+  deckSelectorLabel: {
+    color: '#f8fafc',
     fontSize: 16,
     fontWeight: '600',
   },
-  selectDeckSubtitle: {
-    color: '#d97706',
-    fontSize: 13,
+  deckSelectorStatus: {
+    color: selectedDeck ? '#22c55e' : '#f59e0b',
+    fontSize: 12,
     marginTop: 2,
   },
-  selectDeckArrow: {
-    color: '#f59e0b',
-    fontSize: 18,
+  deckSelectorArrow: {
+    color: selectedDeck ? '#22c55e' : '#f59e0b',
+    fontSize: 16,
     fontWeight: '600',
   },
   activeGamesSection: {
