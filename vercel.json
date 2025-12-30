@@ -1,5 +1,4 @@
 {
-  // Vercel configuration for Expo Router web deployment
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
   "devCommand": "npm run web",
