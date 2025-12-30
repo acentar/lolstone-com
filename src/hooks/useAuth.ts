@@ -59,39 +59,47 @@ export function useAuth() {
     console.log('checkUserRole started for:', user.id);
 
     try {
-      // Use RPC function first (bypasses RLS with SECURITY DEFINER)
-      console.log('Checking GM status via RPC...');
-      
       let isGM = false;
       let gmData = null;
       
+      // Try direct table query first (uses RLS policy "Users can check own GM status")
+      console.log('Checking GM status via direct query...');
       try {
-        const rpcResult = await Promise.race([
-          supabase.rpc('is_game_master', { user_uuid: user.id }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('RPC timeout')), 3000))
+        const gmResult = await Promise.race([
+          supabase.from('game_masters').select('*').eq('user_id', user.id).maybeSingle(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Direct query timeout')), 5000))
         ]) as any;
         
-        console.log('RPC result:', rpcResult);
-        isGM = rpcResult?.data === true;
-      } catch (rpcErr) {
-        console.log('RPC failed or timed out:', rpcErr);
+        console.log('Direct GM query result:', gmResult);
+        
+        if (gmResult?.data) {
+          isGM = true;
+          gmData = gmResult.data;
+          console.log('User is GM via direct query!');
+        }
+      } catch (directErr) {
+        console.log('Direct query failed:', directErr);
+        
+        // Fallback: Try RPC function
+        console.log('Trying RPC fallback...');
+        try {
+          const rpcResult = await Promise.race([
+            supabase.rpc('is_game_master', { user_uuid: user.id }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('RPC timeout')), 3000))
+          ]) as any;
+          
+          console.log('RPC result:', rpcResult);
+          if (rpcResult?.data === true) {
+            isGM = true;
+            gmData = { id: 'unknown', user_id: user.id, name: 'Game Master', email: user.email };
+          }
+        } catch (rpcErr) {
+          console.log('RPC also failed:', rpcErr);
+        }
       }
 
       if (isGM) {
-        console.log('User is GM! Fetching GM data...');
-        try {
-          const gmResult = await Promise.race([
-            supabase.from('game_masters').select('*').eq('user_id', user.id).single(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('GM fetch timeout')), 3000))
-          ]) as any;
-          gmData = gmResult?.data;
-          console.log('GM data fetched:', gmData);
-        } catch (gmErr) {
-          console.log('GM data fetch failed:', gmErr);
-          // Still mark as GM even if we can't fetch the data
-          gmData = { id: 'unknown', user_id: user.id, name: 'Game Master', email: user.email };
-        }
-
+        console.log('Setting state as Game Master');
         setState({
           session,
           user,
