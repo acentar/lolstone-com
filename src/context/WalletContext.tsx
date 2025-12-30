@@ -6,7 +6,7 @@
  * Mobile: Uses deep linking to Phantom app
  */
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Platform } from 'react-native';
 
 // Check if we're on web
@@ -39,8 +39,26 @@ export const useWalletContext = () => useContext(WalletContext);
  */
 function WebWalletProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
-  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [publicKey, setPublicKey] = useState<any>(null);
   const [connecting, setConnecting] = useState(false);
+  const [connection, setConnection] = useState<any>(null);
+
+  // Create Solana connection on mount
+  useEffect(() => {
+    const createConnection = async () => {
+      try {
+        // Dynamically import Solana web3.js
+        const { Connection, clusterApiUrl } = await import('@solana/web3.js');
+        const conn = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+        setConnection(conn);
+        console.log('Solana connection created');
+      } catch (error) {
+        console.error('Failed to create Solana connection:', error);
+      }
+    };
+
+    createConnection();
+  }, []);
 
   const connectPhantomDirectly = async (): Promise<boolean> => {
     if (!isWeb || typeof window === 'undefined') {
@@ -127,7 +145,7 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
     connect,
     disconnect,
     signAndSendTransaction,
-    connection: null, // Not used for direct connection
+    connection,
   };
 
   return (
@@ -142,8 +160,26 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
  */
 function MobileWalletProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
-  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [publicKey, setPublicKey] = useState<any>(null);
   const [connecting, setConnecting] = useState(false);
+  const [connection, setConnection] = useState<any>(null);
+
+  // Create Solana connection on mount
+  useEffect(() => {
+    const createConnection = async () => {
+      try {
+        // Dynamically import Solana web3.js
+        const { Connection, clusterApiUrl } = await import('@solana/web3.js');
+        const conn = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+        setConnection(conn);
+        console.log('Mobile Solana connection created');
+      } catch (error) {
+        console.error('Failed to create mobile Solana connection:', error);
+      }
+    };
+
+    createConnection();
+  }, []);
 
   const connect = async () => {
     setConnecting(true);
@@ -177,7 +213,7 @@ function MobileWalletProvider({ children }: { children: ReactNode }) {
     connect,
     disconnect,
     signAndSendTransaction,
-    connection: null,
+    connection,
   };
 
   return (

@@ -52,7 +52,7 @@ export default function CryptoPayment({
   playerId,
 }: CryptoPaymentProps) {
   // Use wallet context for Phantom connection
-  const { connected, publicKey, connecting, connect, signAndSendTransaction } = useWalletContext();
+  const { connected, publicKey, connecting, connect, signAndSendTransaction, connection } = useWalletContext();
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
