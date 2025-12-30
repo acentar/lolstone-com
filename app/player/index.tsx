@@ -22,6 +22,7 @@ export default function PlayerHomeScreen() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [disconnectedGames, setDisconnectedGames] = useState<any[]>([]);
   const [deckMenuVisible, setDeckMenuVisible] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   // Background task to check for disconnected players and auto-declare winners
   useEffect(() => {
@@ -184,6 +185,50 @@ export default function PlayerHomeScreen() {
     router.push('/player/play');
   };
 
+  // Debug function to check auth status
+  const debugAuthStatus = async () => {
+    try {
+      console.log('=== DEBUG AUTH STATUS ===');
+      console.log('Current user:', user);
+      console.log('User ID:', user?.id);
+      console.log('Is GM from context:', isGameMaster);
+
+      if (user?.id) {
+        // Test the is_game_master RPC function
+        const { data: isGM, error: rpcError } = await supabase.rpc('is_game_master', {
+          user_uuid: user.id
+        });
+        console.log('is_game_master RPC result:', { isGM, rpcError });
+
+        // Check if GM record exists
+        const { data: gmRecord, error: gmError } = await supabase
+          .from('game_masters')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        console.log('GM record from database:', { gmRecord, gmError });
+
+        setDebugInfo({
+          userId: user.id,
+          email: user.email,
+          isGM_RPC: isGM,
+          gmRecord,
+          gmError,
+          rpcError
+        });
+
+        Alert.alert(
+          'Debug Info',
+          `User: ${user.email}\nGM RPC: ${isGM}\nGM Record: ${gmRecord ? 'EXISTS' : 'NOT FOUND'}\nError: ${gmError?.message || 'None'}`
+        );
+      }
+    } catch (error) {
+      console.error('Debug error:', error);
+      Alert.alert('Debug Error', error.message);
+    }
+  };
+
   return (
     <LinearGradient
       colors={['#0f172a', '#1e293b', '#0f172a']}
@@ -200,6 +245,22 @@ export default function PlayerHomeScreen() {
             <Text style={styles.balanceLabel}>💰</Text>
             <Text style={styles.balanceValue}>{player?.ducats?.toLocaleString() || 0}</Text>
           </View>
+        </View>
+
+        {/* Debug Buttons */}
+        <View style={{ flexDirection: 'row', marginBottom: 10, gap: 10, paddingHorizontal: spacing.lg }}>
+          <Pressable
+            style={{ padding: 10, backgroundColor: '#ff6b6b', flex: 1, borderRadius: 8 }}
+            onPress={testAddDucats}
+          >
+            <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>🧪 Test Ducats</Text>
+          </Pressable>
+          <Pressable
+            style={{ padding: 10, backgroundColor: '#8b5cf6', flex: 1, borderRadius: 8 }}
+            onPress={debugAuthStatus}
+          >
+            <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>🔍 Debug Auth</Text>
+          </Pressable>
         </View>
 
         {/* Quick Play Button */}
