@@ -487,16 +487,16 @@ export default function ShopScreen() {
           </Pressable>
           <View style={styles.cryptoPackages}>
             <View style={styles.packagePreview}>
+              <Text style={styles.packageDucats}>100</Text>
+              <Text style={styles.packageLabel}>$1</Text>
+            </View>
+            <View style={styles.packagePreview}>
               <Text style={styles.packageDucats}>500</Text>
               <Text style={styles.packageLabel}>$5</Text>
             </View>
             <View style={styles.packagePreview}>
               <Text style={styles.packageDucats}>1,000</Text>
               <Text style={styles.packageLabel}>$10</Text>
-            </View>
-            <View style={styles.packagePreview}>
-              <Text style={styles.packageDucats}>5,000</Text>
-              <Text style={styles.packageLabel}>$50</Text>
             </View>
           </View>
         </View>

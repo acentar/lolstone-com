@@ -138,6 +138,7 @@ export function formatSolAmount(lamports: number): string {
  * Ducat packages for purchase
  */
 export const DUCAT_PACKAGES = [
+  { ducats: 100, usd: 1, label: 'Mini Pack' },
   { ducats: 500, usd: 5, label: 'Starter Pack' },
   { ducats: 1000, usd: 10, label: 'Value Pack' },
   { ducats: 2500, usd: 25, label: 'Premium Pack' },
