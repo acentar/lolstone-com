@@ -39,6 +39,40 @@ export default function ShopScreen() {
   const [showReveal, setShowReveal] = useState(false);
   const [revealedCards, setRevealedCards] = useState<RevealedCard[]>([]);
   const [showCryptoPayment, setShowCryptoPayment] = useState(false);
+
+  // Debug function to test add_ducats RPC
+  const testAddDucats = async () => {
+    console.log('🧪 Testing add_ducats RPC...');
+    console.log('👤 Current user:', user);
+    console.log('🔑 User ID:', user?.id);
+
+    if (!user?.id) {
+      console.error('❌ No user ID available');
+      Alert.alert('Error', 'No user ID available');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('add_ducats', {
+        p_user_id: user.id,
+        p_amount: 10, // Test with 10 ducats
+      });
+
+      console.log('📊 Test RPC Response:', { data, error });
+
+      if (error) {
+        Alert.alert('Test Failed', `RPC Error: ${error.message}`);
+      } else if (!data?.success) {
+        Alert.alert('Test Failed', `RPC returned: ${JSON.stringify(data)}`);
+      } else {
+        Alert.alert('Test Success', `Added 10 ducats! New balance: ${data.new_balance}`);
+        await refreshPlayer();
+      }
+    } catch (err) {
+      console.error('💥 Test error:', err);
+      Alert.alert('Test Error', `Exception: ${err.message}`);
+    }
+  };
   
   // Animation for the pack
   const packFloat = useState(new Animated.Value(0))[0];
@@ -423,6 +457,14 @@ export default function ShopScreen() {
             </View>
           </View>
         </View>
+
+        {/* Test Button for Debug */}
+        <Pressable
+          style={{ padding: 10, backgroundColor: '#ff6b6b', marginBottom: 10 }}
+          onPress={testAddDucats}
+        >
+          <Text style={{ color: 'white', textAlign: 'center' }}>🧪 Test Add Ducats (Debug)</Text>
+        </Pressable>
 
         {/* Buy Ducats Section */}
         <View style={styles.ducatsSection}>
