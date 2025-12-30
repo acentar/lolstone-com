@@ -14,7 +14,7 @@ const isWeb = Platform.OS === 'web';
 
 interface WalletContextType {
   connected: boolean;
-  publicKey: string | null;
+  publicKey: any; // PublicKey object from Phantom/Solana
   connecting: boolean;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -66,7 +66,7 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
       console.log('Phantom connected! Public key:', response.publicKey.toString());
 
       setConnected(true);
-      setPublicKey(response.publicKey.toString());
+      setPublicKey(response.publicKey); // Store the actual PublicKey object
       return true;
     } catch (error: any) {
       console.error('Direct Phantom connection failed:', error);
