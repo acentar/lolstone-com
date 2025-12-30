@@ -194,3 +194,23 @@ INSERT INTO card_effects (card_design_id, trigger, target, action, value, descri
 SELECT id, 'on_destroy', 'friendly_player', 'draw', 2, 'Draw 2 cards' FROM card_designs WHERE name = 'Doge of Wall Street';
 */
 
+-- 7. Create is_game_master RPC function for authentication
+CREATE OR REPLACE FUNCTION is_game_master(user_uuid UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM game_masters
+    WHERE user_id = user_uuid
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION is_game_master(UUID) TO authenticated;
+
+-- ============================================
+-- After running this migration:
+-- 1. Verify tables are created
+-- 2. Enable Realtime in Supabase Dashboard for matchmaking
+-- ============================================
+
