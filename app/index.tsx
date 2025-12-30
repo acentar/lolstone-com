@@ -67,9 +67,6 @@ export default function LandingPage() {
     }
   };
 
-  const handleGMLogin = () => {
-    router.push('/gmp/login');
-  };
 
   const HeroSection = () => (
     <View style={styles.heroSection}>
@@ -100,12 +97,6 @@ export default function LandingPage() {
                     {user ? 'Continue Playing' : 'Start Your Journey'}
                   </Text>
                 </LinearGradient>
-              </Pressable>
-            </Animated.View>
-
-            <Animated.View entering={ZoomIn.delay(800)}>
-              <Pressable style={styles.secondaryButton} onPress={handleGMLogin}>
-                <Text style={styles.secondaryButtonText}>Game Master Access</Text>
               </Pressable>
             </Animated.View>
           </View>
@@ -367,18 +358,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
-  },
-  secondaryButton: {
-    borderWidth: 2,
-    borderColor: '#a78bfa',
-    borderRadius: 16,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  secondaryButtonText: {
-    color: '#a78bfa',
-    fontSize: 16,
-    fontWeight: '600',
   },
 
   // Floating cards
