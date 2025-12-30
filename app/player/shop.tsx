@@ -531,42 +531,61 @@ export default function ShopScreen() {
         onClose={() => setShowCryptoPayment(false)}
         playerId={user?.id || ''}
         onSuccess={async (ducats, signature) => {
-          console.log(`Crypto payment successful: ${ducats} ducats, tx: ${signature}`);
-          
+          console.log('🚀 onSuccess called with:', { ducats, signature });
+          console.log('👤 Current user:', user);
+          console.log('🔑 User ID:', user?.id);
+
           try {
             // Credit the ducats to the player via RPC
+            console.log('💰 Calling add_ducats RPC...');
             const { data, error } = await supabase.rpc('add_ducats', {
               p_user_id: user?.id,
               p_amount: ducats,
             });
-            
+
+            console.log('📊 RPC Response:', { data, error });
+
             if (error) {
-              console.error('Error adding ducats:', error);
+              console.error('❌ RPC Error:', error);
               Alert.alert(
                 '⚠️ Payment Received',
-                `Your payment was received (tx: ${signature.slice(0, 8)}...) but there was an issue crediting your ducats. Please contact support with this transaction ID.`,
+                `Your payment was received (tx: ${signature.slice(0, 8)}...) but there was an issue crediting your ducats.\n\nError: ${error.message}`,
                 [{ text: 'OK' }]
               );
               setShowCryptoPayment(false);
               return;
             }
-            
-            console.log('Ducats credited successfully:', data);
-            
+
+            if (!data?.success) {
+              console.error('❌ RPC returned success=false:', data);
+              Alert.alert(
+                '⚠️ Payment Received',
+                `Your payment was received (tx: ${signature.slice(0, 8)}...) but ducat crediting failed.\n\nReason: ${data?.error || 'Unknown error'}`,
+                [{ text: 'OK' }]
+              );
+              setShowCryptoPayment(false);
+              return;
+            }
+
+            console.log('✅ Ducats credited successfully:', data);
+
             // Refresh player data to get updated ducat balance
+            console.log('🔄 Refreshing player data...');
             await refreshPlayer();
+            console.log('✅ Player data refreshed');
+
             setShowCryptoPayment(false);
-            
+
             Alert.alert(
               '🎉 Success!',
-              `You received ${ducats.toLocaleString()} ducats!\n\nTransaction: ${signature.slice(0, 12)}...`,
+              `You received ${ducats.toLocaleString()} ducats!\nNew balance: ${data.new_balance}\n\nTransaction: ${signature.slice(0, 12)}...`,
               [{ text: 'Awesome!' }]
             );
           } catch (err) {
-            console.error('Error in onSuccess:', err);
+            console.error('💥 Error in onSuccess:', err);
             Alert.alert(
               '⚠️ Error',
-              'Payment received but failed to credit ducats. Please contact support.',
+              `Payment received but failed to credit ducats.\n\nError: ${err.message}`,
               [{ text: 'OK' }]
             );
             setShowCryptoPayment(false);
