@@ -58,22 +58,30 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
           walletAdapterReact,
           walletAdapterWallets,
           walletAdapterReactUi,
-        ] = await Promise.all([
+        // Load only the essential wallet adapters to avoid dependency issues
+        const [walletAdapterReact, walletAdapterReactUi, web3] = await Promise.all([
           import('@solana/wallet-adapter-react'),
-          import('@solana/wallet-adapter-wallets'),
           import('@solana/wallet-adapter-react-ui'),
-          import('@solana/web3.js'), // Also import web3 for clusterApiUrl
+          import('@solana/web3.js'),
         ]);
+
+        // Try to load wallets, but don't fail if some are missing
+        let walletAdapterWallets;
+        try {
+          walletAdapterWallets = await import('@solana/wallet-adapter-wallets');
+        } catch (error) {
+          console.log('Some wallet adapters not available, using minimal set');
+        }
 
         // Import CSS for wallet modal (web only)
         console.log('Loading wallet adapter CSS...');
-        await import('@solana/wallet-adapter-react-ui/styles.css');
+        try {
+          await import('@solana/wallet-adapter-react-ui/styles.css');
+        } catch (error) {
+          console.log('Wallet adapter CSS not available');
+        }
 
-        // Store web3 for later use
-        console.log('Loading web3.js...');
-        const web3 = await import('@solana/web3.js');
-
-        setWalletComponents({
+        const components: any = {
           ConnectionProvider: walletAdapterReact.ConnectionProvider,
           WalletProvider: walletAdapterReact.WalletProvider,
           useWallet: walletAdapterReact.useWallet,
@@ -81,10 +89,20 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
           useWalletModal: walletAdapterReactUi.useWalletModal,
           WalletModalProvider: walletAdapterReactUi.WalletModalProvider,
           WalletMultiButton: walletAdapterReactUi.WalletMultiButton,
-          PhantomWalletAdapter: walletAdapterWallets.PhantomWalletAdapter,
-          SolflareWalletAdapter: walletAdapterWallets.SolflareWalletAdapter,
           clusterApiUrl: web3.clusterApiUrl,
-        });
+        };
+
+        // Only add wallet adapters if they're available
+        if (walletAdapterWallets) {
+          if (walletAdapterWallets.PhantomWalletAdapter) {
+            components.PhantomWalletAdapter = walletAdapterWallets.PhantomWalletAdapter;
+          }
+          if (walletAdapterWallets.SolflareWalletAdapter) {
+            components.SolflareWalletAdapter = walletAdapterWallets.SolflareWalletAdapter;
+          }
+        }
+
+        setWalletComponents(components);
       } catch (error) {
         console.error('Failed to load wallet adapter:', error);
       } finally {
@@ -99,15 +117,21 @@ function WebWalletProvider({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  const { ConnectionProvider, WalletProvider, WalletModalProvider, PhantomWalletAdapter, SolflareWalletAdapter, clusterApiUrl } = WalletComponents;
+  const { ConnectionProvider, WalletProvider, WalletModalProvider, clusterApiUrl } = WalletComponents;
 
-  const endpoint = clusterApiUrl('mainnet-beta');
+  // Only create wallets if the adapters are available
+  const wallets = [];
+  if (WalletComponents.PhantomWalletAdapter) {
+    wallets.push(new WalletComponents.PhantomWalletAdapter());
+  }
+  if (WalletComponents.SolflareWalletAdapter) {
+    wallets.push(new WalletComponents.SolflareWalletAdapter());
+  }
 
-  // Include multiple wallets for better detection
-  const wallets = [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-  ];
+  const endpoint = clusterApiUrl ? clusterApiUrl('mainnet-beta') : 'https://api.mainnet-beta.solana.com';
+
+  console.log('Setting up wallet provider with', wallets.length, 'wallets');
+  console.log('Wallets:', wallets.map(w => w?.name || 'unknown'));
 
   console.log('Setting up wallet provider with', wallets.length, 'wallets');
   console.log('Wallets:', wallets.map(w => w.name));

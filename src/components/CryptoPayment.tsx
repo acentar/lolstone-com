@@ -52,8 +52,6 @@ export default function CryptoPayment({
   playerId,
 }: CryptoPaymentProps) {
   const { connected, publicKey, connecting, connect, signAndSendTransaction, connection } = useWalletContext();
-  const [walletButtonLoaded, setWalletButtonLoaded] = useState(false);
-  const [WalletButtonComponent, setWalletButtonComponent] = useState<any>(null);
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
@@ -103,19 +101,6 @@ export default function CryptoPayment({
     }
   }, [visible]);
 
-  // Load WalletMultiButton for web
-  useEffect(() => {
-    if (Platform.OS === 'web' && visible) {
-      console.log('Loading WalletMultiButton for web...');
-      import('@solana/wallet-adapter-react-ui').then(module => {
-        console.log('WalletMultiButton loaded successfully');
-        setWalletButtonComponent(() => module.WalletMultiButton);
-        setWalletButtonLoaded(true);
-      }).catch(err => {
-        console.log('WalletMultiButton not available:', err);
-      });
-    }
-  }, [visible]);
 
   // Update payment state when wallet connects
   useEffect(() => {
@@ -323,7 +308,7 @@ export default function CryptoPayment({
               style={styles.buyButtonGradient}
             >
               <Text style={styles.buyButtonText}>
-                {phantomAvailable ? '👻 Connect Phantom' : '🔗 Select Wallet'}
+                👻 Connect Phantom
               </Text>
             </LinearGradient>
           </Pressable>
