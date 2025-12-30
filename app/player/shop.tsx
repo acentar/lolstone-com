@@ -532,14 +532,45 @@ export default function ShopScreen() {
         playerId={user?.id || ''}
         onSuccess={async (ducats, signature) => {
           console.log(`Crypto payment successful: ${ducats} ducats, tx: ${signature}`);
-          // Refresh player data to get updated ducat balance
-          await refreshPlayer();
-          setShowCryptoPayment(false);
-          Alert.alert(
-            '🎉 Success!',
-            `You received ${ducats.toLocaleString()} ducats!`,
-            [{ text: 'Awesome!' }]
-          );
+          
+          try {
+            // Credit the ducats to the player via RPC
+            const { data, error } = await supabase.rpc('add_ducats', {
+              p_user_id: user?.id,
+              p_amount: ducats,
+            });
+            
+            if (error) {
+              console.error('Error adding ducats:', error);
+              Alert.alert(
+                '⚠️ Payment Received',
+                `Your payment was received (tx: ${signature.slice(0, 8)}...) but there was an issue crediting your ducats. Please contact support with this transaction ID.`,
+                [{ text: 'OK' }]
+              );
+              setShowCryptoPayment(false);
+              return;
+            }
+            
+            console.log('Ducats credited successfully:', data);
+            
+            // Refresh player data to get updated ducat balance
+            await refreshPlayer();
+            setShowCryptoPayment(false);
+            
+            Alert.alert(
+              '🎉 Success!',
+              `You received ${ducats.toLocaleString()} ducats!\n\nTransaction: ${signature.slice(0, 12)}...`,
+              [{ text: 'Awesome!' }]
+            );
+          } catch (err) {
+            console.error('Error in onSuccess:', err);
+            Alert.alert(
+              '⚠️ Error',
+              'Payment received but failed to credit ducats. Please contact support.',
+              [{ text: 'OK' }]
+            );
+            setShowCryptoPayment(false);
+          }
         }}
       />
     </LinearGradient>
