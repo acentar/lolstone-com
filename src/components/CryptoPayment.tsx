@@ -51,7 +51,13 @@ export default function CryptoPayment({
   onSuccess,
   playerId,
 }: CryptoPaymentProps) {
-  const { connected, publicKey, connecting, connect, signAndSendTransaction, connection } = useWalletContext();
+  // Temporarily disabled wallet context
+  // const { connected, publicKey, connecting, connect, signAndSendTransaction, connection } = useWalletContext();
+  const connected = false;
+  const publicKey = null;
+  const connecting = false;
+  const connect = async () => {};
+  const signAndSendTransaction = async () => '';
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);

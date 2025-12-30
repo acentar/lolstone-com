@@ -1,81 +1,70 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  useWindowDimensions,
-  Image,
-  Linking,
-} from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  useSharedValue,
-  FadeIn,
-  SlideInUp,
-  ZoomIn,
-} from 'react-native-reanimated';
-import { useAuthContext } from '../src/context/AuthContext';
-import { colors, typography, spacing } from '../src/constants/theme';
+import { colors } from '../src/constants/theme';
 
 export default function LandingPage() {
-  const { user, isGameMaster } = useAuthContext();
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
-  const [showAuthModal, setShowAuthModal] = useState(false);
-
-  // Animated background effects
-  const glowOpacity = useSharedValue(0.3);
-  const cardGlow = useSharedValue(0.5);
-
-  React.useEffect(() => {
-    glowOpacity.value = withRepeat(
-      withSequence(
-        withTiming(0.6, { duration: 2000 }),
-        withTiming(0.3, { duration: 2000 })
-      ),
-      -1,
-      true
-    );
-
-    cardGlow.value = withRepeat(
-      withSequence(
-        withTiming(0.8, { duration: 3000 }),
-        withTiming(0.5, { duration: 3000 })
-      ),
-      -1,
-      true
-    );
-  }, []);
 
   const handleGetStarted = () => {
-    if (user) {
-      if (isGameMaster) {
-        router.push('/gmp');
-      } else {
-        router.push('/player');
-      }
-    } else {
-      // Redirect to auth router which will show login/signup
-      router.push('/auth-router');
-    }
+    router.push('/auth-router');
   };
 
+  return (
+    <View style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.emoji}>🃏</Text>
+        <Text style={styles.title}>LOLSTONE</Text>
+        <Text style={styles.subtitle}>The Ultimate Digital Card Game</Text>
 
-  const HeroSection = () => (
-    <View style={styles.heroSection}>
-      <LinearGradient
-        colors={['#0a0a0f', '#1a0a1f', '#0a0a0f']}
-        style={styles.heroGradient}
-      >
-        <Animated.View entering={FadeIn.delay(200)} style={styles.heroContent}>
-          <Text style={styles.heroEmoji}>🃏</Text>
+        <Pressable style={styles.button} onPress={handleGetStarted}>
+          <Text style={styles.buttonText}>Get Started</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  emoji: {
+    fontSize: 80,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 20,
+    color: colors.textSecondary,
+    marginBottom: 40,
+    textAlign: 'center',
+  },
+  button: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+});
           <Text style={styles.heroTitle}>LOLSTONE</Text>
           <Text style={styles.heroSubtitle}>
             The Ultimate Digital Card Game Battle
