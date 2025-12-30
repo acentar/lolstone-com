@@ -1,128 +1,258 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Text, Card } from 'react-native-paper';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthContext } from '../../src/context/AuthContext';
-import { colors, typography, spacing, borderRadius } from '../../src/constants/theme';
+import { colors, spacing } from '../../src/constants/theme';
 
 export default function PlayerHomeScreen() {
-  const { player, signOut } = useAuthContext();
+  const { player } = useAuthContext();
+  const router = useRouter();
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.emoji}>🎮</Text>
-        <Text style={styles.title}>Welcome, {player?.name || 'Player'}!</Text>
-        <Text style={styles.subtitle}>@{player?.username}</Text>
-        
-        <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Your Balance</Text>
-          <Text style={styles.balanceValue}>💰 {player?.ducats?.toLocaleString() || 0}</Text>
-          <Text style={styles.balanceUnit}>ducats</Text>
+    <LinearGradient
+      colors={['#0f172a', '#1e293b', '#0f172a']}
+      style={styles.container}
+    >
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.greeting}>
+            <Text style={styles.welcomeText}>Welcome back,</Text>
+            <Text style={styles.playerName}>{player?.name || 'Player'}</Text>
+          </View>
+          <View style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>💰</Text>
+            <Text style={styles.balanceValue}>{player?.ducats?.toLocaleString() || 0}</Text>
+          </View>
         </View>
 
-        <Text style={styles.comingSoon}>
-          Player features coming soon!{'\n'}
-          Collection, Decks, Marketplace, Battles...
-        </Text>
-
-        <Pressable style={styles.logoutButton} onPress={signOut}>
-          <Text style={styles.logoutText}>Logout</Text>
+        {/* Quick Play Button */}
+        <Pressable
+          style={styles.playButton}
+          onPress={() => router.push('/player/play')}
+        >
+          <LinearGradient
+            colors={['#22c55e', '#16a34a']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.playGradient}
+          >
+            <Text style={styles.playEmoji}>⚔️</Text>
+            <View>
+              <Text style={styles.playText}>FIND A MATCH</Text>
+              <Text style={styles.playSubtext}>Battle other players</Text>
+            </View>
+          </LinearGradient>
         </Pressable>
-      </View>
 
-      {/* Background decoration */}
-      <View style={styles.glowOrb1} />
-      <View style={styles.glowOrb2} />
-    </View>
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Games Won</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Games Played</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Cards Owned</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Decks Built</Text>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.actionsRow}>
+          <Pressable
+            style={styles.actionCard}
+            onPress={() => router.push('/player/collection')}
+          >
+            <Text style={styles.actionIcon}>🃏</Text>
+            <Text style={styles.actionText}>View Collection</Text>
+          </Pressable>
+          
+          <Pressable
+            style={styles.actionCard}
+            onPress={() => router.push('/player/decks')}
+          >
+            <Text style={styles.actionIcon}>📚</Text>
+            <Text style={styles.actionText}>Build Deck</Text>
+          </Pressable>
+        </View>
+
+        {/* Recent Activity */}
+        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <View style={styles.emptyActivity}>
+          <Text style={styles.emptyEmoji}>🎮</Text>
+          <Text style={styles.emptyText}>No recent games</Text>
+          <Text style={styles.emptySubtext}>Start playing to see your history!</Text>
+        </View>
+      </ScrollView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
+  },
+  scroll: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: 60,
+    paddingBottom: spacing.lg,
   },
-  content: {
-    alignItems: 'center',
-    padding: spacing.xl,
-    zIndex: 1,
+  greeting: {},
+  welcomeText: {
+    color: '#94a3b8',
+    fontSize: 14,
   },
-  emoji: {
-    fontSize: 64,
-    marginBottom: spacing.md,
-  },
-  title: {
-    ...typography.h1,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.primary,
-    marginTop: spacing.xs,
+  playerName: {
+    color: '#f8fafc',
+    fontSize: 24,
+    fontWeight: '700',
   },
   balanceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    marginTop: spacing.xl,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.legendary,
-    minWidth: 200,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    gap: 6,
   },
   balanceLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
+    fontSize: 16,
   },
   balanceValue: {
-    ...typography.h1,
-    color: colors.legendary,
-    marginTop: spacing.sm,
+    color: '#f59e0b',
+    fontSize: 18,
+    fontWeight: '700',
   },
-  balanceUnit: {
-    ...typography.body,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
+  playButton: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  comingSoon: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xl,
-    lineHeight: 24,
+  playGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    gap: 16,
   },
-  logoutButton: {
-    marginTop: spacing.xl,
+  playEmoji: {
+    fontSize: 32,
+  },
+  playText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  playSubtext: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+    borderRadius: 12,
+    padding: spacing.md,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(51, 65, 85, 0.5)',
   },
-  logoutText: {
-    ...typography.body,
-    color: colors.textSecondary,
+  statValue: {
+    color: '#f8fafc',
+    fontSize: 28,
+    fontWeight: '700',
   },
-  glowOrb1: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: colors.secondaryGlow,
-    top: -100,
-    right: -100,
-    opacity: 0.2,
+  statLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 4,
   },
-  glowOrb2: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: colors.primaryGlow,
-    bottom: -50,
-    left: -50,
-    opacity: 0.2,
+  sectionTitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  actionCard: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+    borderRadius: 12,
+    padding: spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 0.5)',
+    gap: 8,
+  },
+  actionIcon: {
+    fontSize: 28,
+  },
+  actionText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  emptyActivity: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: 'rgba(30, 41, 59, 0.5)',
+    borderRadius: 12,
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginBottom: 100,
+  },
+  emptyEmoji: {
+    fontSize: 40,
+    marginBottom: spacing.md,
+  },
+  emptyText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptySubtext: {
+    color: '#64748b',
+    fontSize: 13,
+    marginTop: 4,
   },
 });
-
