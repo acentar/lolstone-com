@@ -40,56 +40,47 @@ export default function ShopScreen() {
   const [revealedCards, setRevealedCards] = useState<RevealedCard[]>([]);
   const [showCryptoPayment, setShowCryptoPayment] = useState(false);
 
-  // Debug function to test add_ducats (direct update)
+  // Test ducat crediting
   const testAddDucats = async () => {
-    console.log('🧪 Testing add_ducats (direct method)...');
-    console.log('👤 Current user:', user);
-    console.log('🔑 User ID:', user?.id);
-
     if (!user?.id) {
-      console.error('❌ No user ID available');
-      Alert.alert('Error', 'No user ID available');
+      Alert.alert('Error', 'Not logged in');
       return;
     }
 
     try {
-      // Method 1: Direct update
-      console.log('💰 Testing direct update...');
-      const { data, error } = await supabase
+      console.log('🧪 Testing ducat crediting...');
+
+      // Get current balance
+      const { data: playerData, error: selectError } = await supabase
         .from('players')
-        .select('ducats, id')
+        .select('id, ducats')
         .eq('user_id', user.id)
         .single();
 
-      if (error) {
-        console.error('❌ Could not find player:', error);
-        Alert.alert('Test Failed', `Player lookup failed: ${error.message}`);
+      if (selectError) {
+        Alert.alert('Test Failed', `Player lookup: ${selectError.message}`);
         return;
       }
 
-      const currentDucats = data?.ducats || 0;
-      const newDucats = currentDucats + 10;
+      const current = playerData?.ducats || 0;
+      const newBalance = current + 10;
 
-      console.log(`🔢 Test update: ${currentDucats} → ${newDucats}`);
-
+      // Update balance
       const { error: updateError } = await supabase
         .from('players')
-        .update({ ducats: newDucats })
+        .update({ ducats: newBalance })
         .eq('user_id', user.id);
 
       if (updateError) {
-        console.error('❌ Update failed:', updateError);
         Alert.alert('Test Failed', `Update failed: ${updateError.message}`);
         return;
       }
 
-      console.log('✅ Direct update succeeded');
       await refreshPlayer();
-      Alert.alert('Test Success', `Added 10 ducats! New balance: ${newDucats}`);
+      Alert.alert('✅ Test Success', `Added 10 ducats!\nBalance: ${newBalance}`);
 
-    } catch (err) {
-      console.error('💥 Test error:', err);
-      Alert.alert('Test Error', `Exception: ${err.message}`);
+    } catch (error) {
+      Alert.alert('Test Error', error.message);
     }
   };
   
@@ -592,113 +583,71 @@ export default function ShopScreen() {
         onClose={() => setShowCryptoPayment(false)}
         playerId={user?.id || ''}
         onSuccess={async (ducats, signature) => {
-          console.log('🚀 onSuccess called with:', { ducats, signature });
-          console.log('👤 Current user:', user);
-          console.log('🔑 User ID:', user?.id);
+          console.log('🚀 Payment successful:', { ducats, signature, userId: user?.id });
 
           try {
-            // Method 1: Try direct update (bypass RPC)
-            console.log('💰 Attempting direct ducats update...');
-            const { data, error } = await supabase
+            // Get current player data
+            const { data: playerData, error: selectError } = await supabase
               .from('players')
-              .select('ducats')
+              .select('id, ducats')
               .eq('user_id', user?.id)
               .single();
 
-            if (error) {
-              console.error('❌ Could not find player:', error);
-              throw new Error('Player not found');
+            if (selectError) {
+              console.error('❌ Player lookup failed:', selectError);
+              throw new Error(`Could not find player: ${selectError.message}`);
             }
 
-            const currentDucats = data?.ducats || 0;
+            const currentDucats = playerData?.ducats || 0;
             const newDucats = currentDucats + ducats;
 
-            console.log(`🔢 Updating balance: ${currentDucats} → ${newDucats}`);
+            console.log(`💰 Updating ducats: ${currentDucats} → ${newDucats}`);
 
+            // Update ducat balance
             const { error: updateError } = await supabase
               .from('players')
               .update({ ducats: newDucats })
               .eq('user_id', user?.id);
 
             if (updateError) {
-              console.error('❌ Update failed:', updateError);
-              throw new Error(`Update failed: ${updateError.message}`);
+              console.error('❌ Ducat update failed:', updateError);
+              throw new Error(`Failed to update ducats: ${updateError.message}`);
             }
 
-            // Record the transaction
-            const { error: transactionError } = await supabase
-              .from('transactions')
-              .insert({
-                type: 'deposit',
-                to_player_id: data.id, // player.id from the select query
-                ducats_amount: ducats,
-                description: `Crypto ducat purchase - ${signature.slice(0, 8)}...`
-              });
-
-            if (transactionError) {
-              console.warn('⚠️ Transaction recording failed:', transactionError);
-              // Don't fail the whole operation for this
+            // Record transaction (non-blocking)
+            try {
+              await supabase
+                .from('transactions')
+                .insert({
+                  type: 'deposit',
+                  to_player_id: playerData.id,
+                  ducats_amount: ducats,
+                  description: `Crypto purchase: ${signature.slice(0, 8)}...`
+                });
+              console.log('✅ Transaction recorded');
+            } catch (txError) {
+              console.warn('⚠️ Transaction recording failed:', txError);
+              // Don't fail the payment for this
             }
 
-            console.log('✅ Ducats credited successfully via direct update');
-
-            // Refresh player data to get updated ducat balance
-            console.log('🔄 Refreshing player data...');
+            // Refresh player data
             await refreshPlayer();
-            console.log('✅ Player data refreshed');
 
             setShowCryptoPayment(false);
 
             Alert.alert(
-              '🎉 Success!',
-              `You received ${ducats.toLocaleString()} ducats!\nNew balance: ${newDucats}\n\nTransaction: ${signature.slice(0, 12)}...`,
+              '🎉 Payment Complete!',
+              `You received ${ducats.toLocaleString()} ducats!\n\nBalance: ${newDucats}\nTransaction: ${signature.slice(0, 12)}...`,
               [{ text: 'Awesome!' }]
             );
-          } catch (err) {
-            console.error('💥 Error in onSuccess:', err);
 
-            // Method 2: Fallback to RPC if direct update fails
-            console.log('🔄 Trying RPC fallback...');
-            try {
-              const { data: rpcData, error: rpcError } = await supabase.rpc('add_ducats', {
-                p_user_id: user?.id,
-                p_amount: ducats,
-              });
-
-              if (rpcError) {
-                console.error('❌ RPC also failed:', rpcError);
-                Alert.alert(
-                  '⚠️ Payment Received',
-                  `Your payment was received (tx: ${signature.slice(0, 8)}...) but ducat crediting failed.\n\nDirect update: ${err.message}\nRPC: ${rpcError.message}`,
-                  [{ text: 'OK' }]
-                );
-              } else if (!rpcData?.success) {
-                console.error('❌ RPC returned failure:', rpcData);
-                Alert.alert(
-                  '⚠️ Payment Received',
-                  `Your payment was received (tx: ${signature.slice(0, 8)}...) but ducat crediting failed.\n\nReason: ${rpcData?.error || 'Unknown RPC error'}`,
-                  [{ text: 'OK' }]
-                );
-              } else {
-                console.log('✅ RPC fallback succeeded:', rpcData);
-                await refreshPlayer();
-                setShowCryptoPayment(false);
-                Alert.alert(
-                  '🎉 Success!',
-                  `You received ${ducats.toLocaleString()} ducats!\nNew balance: ${rpcData.new_balance}\n\nTransaction: ${signature.slice(0, 12)}...`,
-                  [{ text: 'Awesome!' }]
-                );
-                return;
-              }
-            } catch (rpcFallbackError) {
-              console.error('❌ Both methods failed');
-              Alert.alert(
-                '⚠️ Error',
-                `Payment received but failed to credit ducats.\n\nDirect: ${err.message}\nRPC: ${rpcFallbackError.message}`,
-                [{ text: 'OK' }]
-              );
-            }
-
+          } catch (error) {
+            console.error('💥 Ducat crediting failed:', error);
+            Alert.alert(
+              '⚠️ Payment Received',
+              `Your payment was received (${signature.slice(0, 8)}...) but ducat crediting failed.\n\n${error.message}`,
+              [{ text: 'Contact Support' }]
+            );
             setShowCryptoPayment(false);
           }
         }}
