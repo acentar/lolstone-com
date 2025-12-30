@@ -1,12 +1,35 @@
 /**
  * Crypto Payment Utilities
- * 
+ *
  * Handles Solana/USDC price fetching and payment calculations.
  * 1 ducat = 0.01 USD
  */
 
-import { PublicKey, Connection, Transaction, clusterApiUrl } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createTransferInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+// Dynamic imports to avoid Buffer issues on initial load
+let PublicKey: any;
+let Connection: any;
+let Transaction: any;
+let clusterApiUrl: any;
+let getAssociatedTokenAddress: any;
+let createTransferInstruction: any;
+let TOKEN_PROGRAM_ID: any;
+
+// Lazy load Solana libraries
+const loadSolanaLibs = async () => {
+  if (!PublicKey) {
+    const web3 = await import('@solana/web3.js');
+    PublicKey = web3.PublicKey;
+    Connection = web3.Connection;
+    Transaction = web3.Transaction;
+    clusterApiUrl = web3.clusterApiUrl;
+  }
+  if (!getAssociatedTokenAddress) {
+    const spl = await import('@solana/spl-token');
+    getAssociatedTokenAddress = spl.getAssociatedTokenAddress;
+    createTransferInstruction = spl.createTransferInstruction;
+    TOKEN_PROGRAM_ID = spl.TOKEN_PROGRAM_ID;
+  }
+};
 
 // Your receiver wallet address (hardcoded - keep private key offline!)
 export const RECEIVER_WALLET = new PublicKey('8XnSN4Jix5TDmybFix3f3ircvKK96FJGXiU4PEojubA4');
@@ -27,7 +50,10 @@ export const DUCAT_USD_RATE = 0.01;
 export const SOL_PRICE_BUFFER = 0.05;
 
 // Connection to Solana mainnet
-export const getConnection = () => new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+export const getConnection = async () => {
+  await loadSolanaLibs();
+  return new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+};
 
 /**
  * Get USDC price (always ~$1)
@@ -105,16 +131,18 @@ export const DUCAT_PACKAGES = [
  * Create a USDC transfer transaction
  */
 export async function createUsdcTransferTransaction(
-  senderPublicKey: PublicKey,
+  senderPublicKey: any,
   ducats: number,
-  connection: Connection
-): Promise<Transaction> {
+  connection: any
+): Promise<any> {
+  await loadSolanaLibs();
+
   const amount = calculateUsdcAmount(ducats);
-  
+
   // Get associated token addresses
   const senderATA = await getAssociatedTokenAddress(USDC_MINT, senderPublicKey);
   const receiverATA = await getAssociatedTokenAddress(USDC_MINT, RECEIVER_WALLET);
-  
+
   // Create transfer instruction
   const transferInstruction = createTransferInstruction(
     senderATA,
@@ -124,15 +152,15 @@ export async function createUsdcTransferTransaction(
     [],
     TOKEN_PROGRAM_ID
   );
-  
+
   // Create transaction
   const transaction = new Transaction().add(transferInstruction);
-  
+
   // Get latest blockhash
   const { blockhash } = await connection.getLatestBlockhash();
   transaction.recentBlockhash = blockhash;
   transaction.feePayer = senderPublicKey;
-  
+
   return transaction;
 }
 
@@ -141,22 +169,23 @@ export async function createUsdcTransferTransaction(
  */
 export async function verifyTransaction(
   signature: string,
-  connection: Connection
+  connection?: any
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const tx = await connection.getParsedTransaction(signature, {
+    const conn = connection || await getConnection();
+    const tx = await conn.getParsedTransaction(signature, {
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 0,
     });
-    
+
     if (!tx) {
       return { success: false, error: 'Transaction not found' };
     }
-    
+
     if (tx.meta?.err) {
       return { success: false, error: 'Transaction failed' };
     }
-    
+
     return { success: true };
   } catch (error) {
     return { success: false, error: (error as Error).message };

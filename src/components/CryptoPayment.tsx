@@ -34,7 +34,6 @@ import {
   formatSolAmount,
   createUsdcTransferTransaction,
   verifyTransaction,
-  getConnection,
 } from '../lib/crypto';
 
 interface CryptoPaymentProps {
@@ -122,7 +121,7 @@ export default function CryptoPayment({
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Verify transaction
-      const verification = await verifyTransaction(sig, connection);
+      const verification = await verifyTransaction(sig);
       
       if (verification.success) {
         setPaymentState('success');

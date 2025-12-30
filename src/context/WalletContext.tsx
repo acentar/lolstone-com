@@ -1,6 +1,6 @@
 /**
  * Wallet Context for Solana/Phantom Integration
- * 
+ *
  * Provides wallet connection and transaction capabilities for both web and mobile.
  * Web: Uses @solana/wallet-adapter
  * Mobile: Uses deep linking to Phantom app
@@ -8,7 +8,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { Platform } from 'react-native';
-import { Connection, PublicKey, Transaction, clusterApiUrl } from '@solana/web3.js';
 
 // Only import wallet adapter on web
 let WalletAdapterNetwork: any;
@@ -150,23 +149,28 @@ function WebWalletContextBridge({
  */
 function MobileWalletProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
-  const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
+  const [publicKey, setPublicKey] = useState<any>(null);
   const [connecting, setConnecting] = useState(false);
-  const connection = useMemo(() => new Connection(clusterApiUrl('mainnet-beta'), 'confirmed'), []);
+  const [connection, setConnection] = useState<any>(null);
 
   const connect = async () => {
     setConnecting(true);
     try {
+      // Load Solana libraries dynamically
+      const { Connection, clusterApiUrl } = await import('@solana/web3.js');
+      const conn = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+      setConnection(conn);
+
       // For mobile, we'll use deep linking to Phantom
       // This is a simplified version - full implementation would use @solana/wallet-standard
       const Linking = await import('expo-linking');
-      
+
       // Create Phantom connect URL
       const redirectUrl = Linking.createURL('phantom-connect');
       const phantomConnectUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent('https://lolstone.com')}&redirect_link=${encodeURIComponent(redirectUrl)}`;
-      
+
       await Linking.openURL(phantomConnectUrl);
-      
+
       // Note: Full implementation would handle the callback with the public key
       // For now, we'll show a placeholder
     } catch (error) {
@@ -181,7 +185,7 @@ function MobileWalletProvider({ children }: { children: ReactNode }) {
     setPublicKey(null);
   };
 
-  const signAndSendTransaction = async (transaction: Transaction): Promise<string> => {
+  const signAndSendTransaction = async (transaction: any): Promise<string> => {
     // For mobile, we'd serialize the transaction and send via deep link
     throw new Error('Mobile transaction signing not yet implemented');
   };

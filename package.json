@@ -21,6 +21,7 @@
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.89.0",
     "@vercel/node": "^5.5.16",
+    "buffer": "^6.0.3",
     "expo": "~54.0.30",
     "expo-constants": "~18.0.12",
     "expo-image-picker": "~17.0.10",
