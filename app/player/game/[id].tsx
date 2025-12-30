@@ -12,6 +12,7 @@ import {
   GameInstance,
   createGame,
   CardInHand,
+  createMulliganAction,
 } from '../../../src/game';
 import { CardDesignFull } from '../../../src/types/database';
 import { spacing } from '../../../src/constants/theme';
@@ -118,7 +119,7 @@ export default function GamePlayScreen() {
       }
 
       // Create game state
-      const gameState = createGame({
+      const initialGameState = createGame({
         gameId: room.id,
         player1Id: room.player1_id,
         player1Name: player1Data.data?.name || 'Player 1',
@@ -130,14 +131,22 @@ export default function GamePlayScreen() {
         player2Deck: player2Deck,
       });
 
+      // Create game instance
+      const instance = new GameInstance(initialGameState);
+      
+      // Auto-complete mulligan for both players (skip mulligan phase)
+      // This transitions the game from 'mulligan' to 'playing' and starts the first turn
+      instance.completeMulligan(room.player1_id, []);
+      instance.completeMulligan(room.player2_id, []);
+      
+      // Get the final game state after mulligan
+      const gameState = instance.getState();
+
       // Save initial state to database
       const saved = await matchmakingService.updateGameState(room.id, gameState, 'playing');
       if (!saved) {
         console.warn('Failed to save initial game state, continuing anyway');
       }
-
-      // Create game instance
-      const instance = new GameInstance(gameState);
       
       // Subscribe to state changes to sync with database
       instance.subscribe(async (newState) => {
