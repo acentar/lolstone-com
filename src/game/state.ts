@@ -108,6 +108,7 @@ export function createGame(options: CreateGameOptions): GameState {
     defendingTargetId: null,
     pendingEffects: [],
     lastAction: null,
+    lastAttackAnimation: null,
     createdAt: now,
     turnStartedAt: now,
     turnTimeLimit: options.turnTimeLimit || GAME_CONFIG.TURN_TIME_LIMIT,
@@ -293,7 +294,7 @@ function createDummyUnit(card: CardInHand): Partial<UnitInPlay> {
 /**
  * Queue on_play effects for a unit
  */
-function queueOnPlayEffects(state: GameState, unit: UnitInPlay, playerId: string): void {
+export function queueOnPlayEffects(state: GameState, unit: UnitInPlay, playerId: string): void {
   const onPlayEffects = unit.design.effects.filter(e => e.trigger === 'on_play');
   
   for (const effect of onPlayEffects) {

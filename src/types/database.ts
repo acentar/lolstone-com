@@ -81,6 +81,7 @@ export interface Database {
           user_id: string;
           name: string;
           username: string;
+          email: string | null;
           avatar_url: string | null;
           ducats: number;
           created_at: string;
@@ -91,6 +92,7 @@ export interface Database {
           user_id: string;
           name: string;
           username: string;
+          email?: string | null;
           avatar_url?: string | null;
           ducats?: number;
           created_at?: string;
@@ -101,6 +103,7 @@ export interface Database {
           user_id?: string;
           name?: string;
           username?: string;
+          email?: string | null;
           avatar_url?: string | null;
           ducats?: number;
           created_at?: string;
@@ -140,6 +143,7 @@ export interface Database {
           token_trigger: string | null;
           token_count: number;
           token_max_summons: number;
+          token_keywords: CardKeyword[] | null;
         };
         Insert: {
           id?: string;
@@ -173,6 +177,7 @@ export interface Database {
           token_trigger?: string | null;
           token_count?: number;
           token_max_summons?: number;
+          token_keywords?: CardKeyword[] | null;
         };
         Update: {
           id?: string;
@@ -206,6 +211,7 @@ export interface Database {
           token_trigger?: string | null;
           token_count?: number;
           token_max_summons?: number;
+          token_keywords?: CardKeyword[] | null;
         };
       };
       card_effects: {

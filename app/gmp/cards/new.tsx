@@ -20,9 +20,9 @@ import TokenPreview from '../../../src/components/TokenPreview';
 const RARITIES: CardRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const CARD_TYPES: CardType[] = ['meme_minion', 'viral_spell', 'troll_legendary', 'reaction_trap', 'copypasta_enchantment'];
 const KEYWORDS: CardKeyword[] = ['frontline', 'quick', 'evasion', 'boost'];
-const TRIGGERS: EffectTrigger[] = ['on_play', 'on_destroy', 'on_attack', 'on_damaged'];
-const TARGETS: EffectTarget[] = ['enemy_unit', 'any_unit', 'enemy_player', 'friendly_unit', 'self', 'all_enemies', 'random_enemy'];
-const ACTIONS: EffectAction[] = ['damage', 'heal', 'draw', 'buff_attack', 'buff_health', 'destroy', 'stun'];
+const TRIGGERS: EffectTrigger[] = ['on_play', 'on_destroy', 'on_attack', 'on_damaged', 'end_of_turn', 'start_of_turn'];
+const TARGETS: EffectTarget[] = ['self', 'friendly_unit', 'enemy_unit', 'any_unit', 'friendly_player', 'enemy_player', 'all_friendly', 'all_enemies', 'all_units', 'random_enemy', 'random_friendly'];
+const ACTIONS: EffectAction[] = ['damage', 'heal', 'draw', 'buff_attack', 'buff_health', 'destroy', 'summon', 'silence', 'return_hand', 'copy', 'stun'];
 const TOKEN_TRIGGERS: TokenTrigger[] = ['on_play', 'on_destroy', 'on_attack', 'on_damaged'];
 
 const RARITY_COLORS: Record<CardRarity, string> = {
@@ -74,6 +74,7 @@ interface CardFormData {
   tokenTrigger: TokenTrigger;
   tokenCount: number;
   tokenMaxSummons: number;
+  tokenKeywords: CardKeyword[];
 }
 
 const initialFormData: CardFormData = {
@@ -102,6 +103,7 @@ const initialFormData: CardFormData = {
   tokenTrigger: 'on_play',
   tokenCount: 1,
   tokenMaxSummons: 1,
+  tokenKeywords: [],
 };
 
 export default function CardDesignerPage() {
@@ -256,6 +258,15 @@ export default function CardDesignerPage() {
     setFormData(prev => ({ ...prev, tokenImageUri: null, tokenImageUrl: null }));
   };
 
+  const toggleTokenKeyword = (keyword: CardKeyword) => {
+    setFormData(prev => ({
+      ...prev,
+      tokenKeywords: prev.tokenKeywords.includes(keyword)
+        ? prev.tokenKeywords.filter(k => k !== keyword)
+        : [...prev.tokenKeywords, keyword],
+    }));
+  };
+
   const generateAbilityText = (): string => {
     const parts: string[] = [];
     
@@ -304,10 +315,10 @@ export default function CardDesignerPage() {
     if (formData.hasToken && formData.tokenName) {
       const triggerInfo = TOKEN_TRIGGER_INFO[formData.tokenTrigger];
       let tokenText = `${triggerInfo.name}: Summon `;
-      
+
       if (formData.tokenTrigger === 'on_play' || formData.tokenTrigger === 'on_destroy') {
-        tokenText += formData.tokenCount > 1 
-          ? `${formData.tokenCount} ${formData.tokenName}s` 
+        tokenText += formData.tokenCount > 1
+          ? `${formData.tokenCount} ${formData.tokenName}s`
           : `a ${formData.tokenName}`;
       } else {
         tokenText += `a ${formData.tokenName}`;
@@ -317,11 +328,17 @@ export default function CardDesignerPage() {
           tokenText += ` (once)`;
         }
       }
-      
+
+      // Add token keywords to the description
+      if (formData.tokenKeywords.length > 0) {
+        const keywordNames = formData.tokenKeywords.map(kw => KEYWORD_INFO[kw].name);
+        tokenText += ` with ${keywordNames.join(' and ')}`;
+      }
+
       parts.push(tokenText);
     }
     
-    return parts.join('. ') + (parts.length > 0 ? '.' : '');
+    return parts.join('. ') + (parts.length > 0 ? '.' : '').trim();
   };
 
   const toggleKeyword = (keyword: CardKeyword) => {
@@ -350,45 +367,82 @@ export default function CardDesignerPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.name) return;
-    
+    if (!formData.name) {
+      Alert.alert('Error', 'Card name is required');
+      return;
+    }
+
+    if (!gameMaster) {
+      Alert.alert('Error', 'You must be logged in as a game master to create cards');
+      return;
+    }
+
+    console.log('Game master found:', gameMaster);
+    console.log('Form data:', formData);
+
     setSaving(true);
     try {
       const abilityText = generateAbilityText();
-      
+
+      console.log('Saving card with data:', {
+        name: formData.name,
+        category: formData.category,
+        hasToken: formData.hasToken,
+        tokenKeywords: formData.tokenKeywords,
+        abilityText,
+      });
+
+      // Prepare the insert data, excluding token_keywords if the database doesn't support it yet
+      const insertData: any = {
+        name: formData.name,
+        ability_text: abilityText || null,
+        flavor_text: formData.flavorText || null,
+        balance_notes: formData.balanceNotes || null,
+        inspiration: formData.inspiration || null,
+        mana_cost: formData.manaCost,
+        attack: formData.category === 'unit' ? formData.attack : null,
+        health: formData.category === 'unit' ? formData.health : null,
+        base_attack: formData.category === 'unit' ? formData.attack : 0,
+        base_health: formData.category === 'unit' ? formData.health : 0,
+        rarity: formData.rarity,
+        card_type: formData.cardType,
+        category: formData.category,
+        max_supply: formData.maxSupply,
+        image_url: formData.imageUrl,
+        created_by: gameMaster?.id,
+        // Token fields
+        has_token: formData.hasToken,
+        token_name: formData.hasToken ? formData.tokenName : null,
+        token_image_url: formData.hasToken ? formData.tokenImageUrl : null,
+        token_attack: formData.tokenAttack,
+        token_health: formData.tokenHealth,
+        token_trigger: formData.hasToken ? formData.tokenTrigger : null,
+        token_count: formData.tokenCount,
+        token_max_summons: formData.tokenMaxSummons,
+      };
+
+      // Only add token_keywords if we have them (for backward compatibility)
+      // Note: This field may not exist in the database until migration 016 is run
+      try {
+        if (formData.hasToken && formData.tokenKeywords.length > 0) {
+          insertData.token_keywords = formData.tokenKeywords;
+        }
+      } catch (e) {
+        console.warn('token_keywords field not available, skipping');
+      }
+
       const { data: cardData, error: cardError } = await supabase
         .from('card_designs')
-        .insert({
-          name: formData.name,
-          ability_text: abilityText || null,
-          flavor_text: formData.flavorText || null,
-          balance_notes: formData.balanceNotes || null,
-          inspiration: formData.inspiration || null,
-          mana_cost: formData.manaCost,
-          attack: formData.category === 'unit' ? formData.attack : null,
-          health: formData.category === 'unit' ? formData.health : null,
-          base_attack: formData.category === 'unit' ? formData.attack : 0,
-          base_health: formData.category === 'unit' ? formData.health : 0,
-          rarity: formData.rarity,
-          card_type: formData.cardType,
-          category: formData.category,
-          max_supply: formData.maxSupply,
-          image_url: formData.imageUrl,
-          created_by: gameMaster?.id,
-          // Token fields
-          has_token: formData.hasToken,
-          token_name: formData.hasToken ? formData.tokenName : null,
-          token_image_url: formData.hasToken ? formData.tokenImageUrl : null,
-          token_attack: formData.tokenAttack,
-          token_health: formData.tokenHealth,
-          token_trigger: formData.hasToken ? formData.tokenTrigger : null,
-          token_count: formData.tokenCount,
-          token_max_summons: formData.tokenMaxSummons,
-        })
+        .insert(insertData)
         .select()
         .single();
 
-      if (cardError) throw cardError;
+      if (cardError) {
+        console.error('Card insert error:', cardError);
+        throw cardError;
+      }
+
+      console.log('Card created successfully:', cardData);
 
       // Insert keywords
       if (formData.keywords.length > 0) {
@@ -414,9 +468,10 @@ export default function CardDesignerPage() {
         );
       }
 
-      router.back();
+      router.replace('/gmp/cards');
     } catch (error) {
       console.error('Error saving card:', error);
+      Alert.alert('Error', `Failed to create card: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setSaving(false);
     }
@@ -814,6 +869,30 @@ export default function CardDesignerPage() {
                     </View>
                   </View>
 
+                  {/* Token Keywords */}
+                  <Text style={styles.effectLabel}>Token Keywords (Optional)</Text>
+                  <View style={styles.tokenKeywordsGrid}>
+                    {KEYWORDS.map((kw) => (
+                      <Pressable
+                        key={kw}
+                        style={[
+                          styles.tokenKeywordButton,
+                          formData.tokenKeywords.includes(kw) && styles.tokenKeywordButtonActive,
+                        ]}
+                        onPress={() => toggleTokenKeyword(kw)}
+                      >
+                        <Text style={styles.tokenKeywordIcon}>{KEYWORD_INFO[kw].icon}</Text>
+                        <Text style={[
+                          styles.tokenKeywordName,
+                          formData.tokenKeywords.includes(kw) && styles.tokenKeywordNameActive,
+                        ]}>
+                          {KEYWORD_INFO[kw].name}
+                        </Text>
+                        <Text style={styles.tokenKeywordDesc}>{KEYWORD_INFO[kw].description}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
                   {/* Token Trigger */}
                   <Text style={styles.effectLabel}>When to Summon?</Text>
                   <View style={styles.tokenTriggerGrid}>
@@ -974,6 +1053,7 @@ export default function CardDesignerPage() {
               attack={formData.tokenAttack}
               health={formData.tokenHealth}
               imageUrl={formData.tokenImageUrl || formData.tokenImageUri || undefined}
+              keywords={formData.tokenKeywords}
               scale={isWideScreen ? 1 : 0.8}
             />
           </View>
@@ -1412,6 +1492,44 @@ const styles = StyleSheet.create({
   tokenImageUploadText: {
     fontSize: 10,
     color: adminColors.textMuted,
+  },
+  tokenKeywordsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: adminSpacing.sm,
+    marginTop: adminSpacing.xs,
+  },
+  tokenKeywordButton: {
+    flex: 1,
+    minWidth: 120,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.md,
+    padding: adminSpacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: adminColors.border,
+  },
+  tokenKeywordButtonActive: {
+    borderColor: adminColors.accent,
+    backgroundColor: adminColors.accentLight,
+  },
+  tokenKeywordIcon: {
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  tokenKeywordName: {
+    fontSize: 11,
+    color: adminColors.textSecondary,
+    fontWeight: '500',
+  },
+  tokenKeywordNameActive: {
+    color: adminColors.accent,
+  },
+  tokenKeywordDesc: {
+    fontSize: 9,
+    color: adminColors.textMuted,
+    marginTop: 1,
+    textAlign: 'center',
   },
   tokenStatsRow: {
     flexDirection: 'row',

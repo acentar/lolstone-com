@@ -104,7 +104,7 @@ export default function PlayerAuthScreen() {
       if (authError) {
         setError(authError.message);
       } else {
-        router.replace('/');
+        router.replace('/player');
       }
     } catch (e: any) {
       setError(e.message || 'Login failed');
@@ -114,6 +114,8 @@ export default function PlayerAuthScreen() {
   };
 
   const handleRegister = async () => {
+    console.log('📝 Starting registration...');
+    
     if (!email || !password || !displayName || !username) {
       setError('Please fill in all required fields');
       return;
@@ -134,16 +136,30 @@ export default function PlayerAuthScreen() {
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      // Check if username is taken
-      const { data: existingUser } = await supabase
+      console.log('📝 Checking if username is taken:', username.toLowerCase());
+      
+      // Check if username is taken - use maybeSingle() to avoid error on no match
+      const { data: existingUser, error: usernameCheckError } = await supabase
         .from('players')
         .select('id')
         .eq('username', username.toLowerCase())
-        .single();
+        .maybeSingle();
+
+      if (usernameCheckError) {
+        console.error('📝 Username check error:', usernameCheckError);
+        // Don't block registration on username check error, continue with signup
+      }
 
       if (existingUser) {
         setError('Username is already taken');
@@ -151,59 +167,97 @@ export default function PlayerAuthScreen() {
         return;
       }
 
+      console.log('📝 Creating auth user...');
+      
       // Create auth user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (signUpError) {
-        setError(signUpError.message);
+        console.error('📝 SignUp error:', signUpError);
+        // Handle specific error messages
+        if (signUpError.message.includes('already registered')) {
+          setError('This email is already registered. Please log in instead.');
+        } else {
+          setError(signUpError.message);
+        }
         setLoading(false);
         return;
       }
 
       if (!authData.user) {
-        setError('Failed to create account');
+        console.error('📝 No user returned from signUp');
+        setError('Failed to create account. Please try again.');
         setLoading(false);
         return;
       }
 
+      console.log('📝 Auth user created:', authData.user.id);
+
       // Upload avatar if selected
       let uploadedAvatarUrl: string | null = null;
       if (avatarUri) {
+        console.log('📝 Uploading avatar...');
         uploadedAvatarUrl = await uploadAvatar(authData.user.id);
       }
 
+      console.log('📝 Creating player profile...');
+      
       // Create player profile
       const { error: profileError } = await supabase
         .from('players')
         .insert({
           user_id: authData.user.id,
-          name: displayName,
-          username: username.toLowerCase(),
+          name: displayName.trim(),
+          username: username.toLowerCase().trim(),
+          email: email.toLowerCase().trim(),
           avatar_url: uploadedAvatarUrl,
           ducats: 100, // Starting currency
         });
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
-        setError('Account created but profile setup failed. Please contact support.');
+        console.error('📝 Profile creation error:', profileError);
+        // Try to provide a more helpful error message
+        if (profileError.message.includes('duplicate key')) {
+          if (profileError.message.includes('username')) {
+            setError('Username is already taken');
+          } else if (profileError.message.includes('email')) {
+            setError('Email is already registered');
+          } else {
+            setError('Account with these details already exists');
+          }
+        } else {
+          setError('Account created but profile setup failed. Please try logging in.');
+        }
         setLoading(false);
         return;
       }
 
+      console.log('📝 Player profile created! Auto signing in...');
+
       // Auto sign in
-      const { error: signInError } = await signIn(email, password);
+      const { error: signInError } = await signIn(email.trim(), password);
       
       if (signInError) {
-        Alert.alert('Account Created', 'Please log in with your new account.');
+        console.log('📝 Auto sign-in failed:', signInError);
+        Alert.alert('Account Created', 'Your account has been created! Please log in with your new account.');
         setIsRegister(false);
+        // Clear form
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setDisplayName('');
+        setUsername('');
+        setAvatarUri(null);
       } else {
-        router.replace('/');
+        console.log('📝 Registration complete, navigating to player home');
+        router.replace('/player');
       }
     } catch (e: any) {
-      setError(e.message || 'Registration failed');
+      console.error('📝 Registration exception:', e);
+      setError(e.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -360,10 +414,10 @@ export default function PlayerAuthScreen() {
               </Text>
             </Pressable>
 
-            {/* GM Link */}
-            <Pressable style={styles.gmLink} onPress={() => router.push('/auth/login')}>
-              <Text style={styles.gmLinkText}>
-                Game Master? Go to GM Login →
+            {/* Back to Landing */}
+            <Pressable style={styles.backLink} onPress={() => router.push('/')}>
+              <Text style={styles.backLinkText}>
+                ← Back to Lolstone
               </Text>
             </Pressable>
           </View>
@@ -566,12 +620,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // GM Link
-  gmLink: {
+  // Back Link
+  backLink: {
     marginTop: 8,
     padding: 8,
   },
-  gmLinkText: {
+  backLinkText: {
     color: '#64748b',
     fontSize: 13,
     textAlign: 'center',

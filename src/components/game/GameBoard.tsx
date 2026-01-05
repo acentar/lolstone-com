@@ -19,6 +19,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import UnitOnBoard from './UnitOnBoard';
 import { UnitInPlay, GAME_CONFIG } from '../../game/types';
 
+interface AttackAnimation {
+  attackerId: string;
+  targetId: string;
+  isActive: boolean;
+}
+
 interface GameBoardProps {
   playerBoard: UnitInPlay[];
   opponentBoard: UnitInPlay[];
@@ -26,11 +32,13 @@ interface GameBoardProps {
   playerId: string;
   selectedAttackerId: string | null;
   validAttackTargets: string[];
+  attackAnimation?: AttackAnimation | null;
   onSelectUnit?: (unitId: string) => void;
   onAttackTarget?: (targetId: string) => void;
   onAttackFace?: () => void;
   canAttackFace?: boolean;
   onUnitLongPress?: (unitId: string) => void;
+  onUnitDoubleTap?: (unitId: string) => void;
 }
 
 export default function GameBoard({
@@ -40,11 +48,13 @@ export default function GameBoard({
   playerId,
   selectedAttackerId,
   validAttackTargets,
+  attackAnimation,
   onSelectUnit,
   onAttackTarget,
   onAttackFace,
   canAttackFace = false,
   onUnitLongPress,
+  onUnitDoubleTap,
 }: GameBoardProps) {
   const isPlayerTurn = activePlayerId === playerId;
 
@@ -69,6 +79,14 @@ export default function GameBoard({
     const canAttack = unitOwned && isPlayerTurn && unit?.canAttack && !unit?.hasSummoningSickness;
     const isValidTarget = validAttackTargets.includes(unit?.id || '');
     const isAttacking = selectedAttackerId === unit?.id;
+    
+    // Check if this unit is involved in an attack animation
+    const isChargingAttack = attackAnimation?.isActive && attackAnimation.attackerId === unit?.id;
+    const isBeingAttacked = attackAnimation?.isActive && attackAnimation.targetId === unit?.id;
+    
+    // Charge direction: player's units charge UP (toward opponent), opponent's units charge DOWN
+    // If this is the player's unit (isOwned=true, isOpponent=false), it charges UP
+    const chargesUp = !isOpponent;
 
     return (
       <View key={index} style={styles.slot}>
@@ -83,9 +101,13 @@ export default function GameBoard({
             canAttack={canAttack || false}
             isValidTarget={isValidTarget}
             isAttacking={isAttacking}
+            isChargingAttack={isChargingAttack || false}
+            isBeingAttacked={isBeingAttacked || false}
+            attackingUp={chargesUp}
             onSelect={() => onSelectUnit?.(unit.id)}
             onAttackTarget={() => onAttackTarget?.(unit.id)}
             onLongPress={() => onUnitLongPress?.(unit.id)}
+            onDoubleTap={() => onUnitDoubleTap?.(unit.id)}
           />
         )}
       </View>

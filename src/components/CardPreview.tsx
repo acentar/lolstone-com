@@ -107,6 +107,8 @@ export default function CardPreview({
   showCollectibleInfo = true,
   onPress,
 }: CardPreviewProps) {
+  console.log('🖼️ CardPreview for:', name, 'imageUrl:', imageUrl);
+
   const config = RARITY_CONFIGS[rarity];
   const rotation = useSharedValue(0);
   const pulseScale = useSharedValue(1);

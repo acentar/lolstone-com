@@ -26,6 +26,7 @@ interface MatchmakingScreenProps {
   playerId: string;
   playerName: string;
   decks: Deck[];
+  selectedDeckId?: string;
   onGameStart: (gameRoomId: string) => void;
   onCancel: () => void;
 }
@@ -34,11 +35,12 @@ export default function MatchmakingScreen({
   playerId,
   playerName,
   decks,
+  selectedDeckId: initialDeckId,
   onGameStart,
   onCancel,
 }: MatchmakingScreenProps) {
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(
-    decks.length > 0 ? decks[0].id : null
+    initialDeckId || (decks.length > 0 ? decks[0].id : null)
   );
 
   const {
@@ -80,6 +82,13 @@ export default function MatchmakingScreen({
       onGameStart(gameRoomId);
     }
   }, [state, gameRoomId, onGameStart]);
+
+  // Auto-start searching if deck was pre-selected
+  useEffect(() => {
+    if (initialDeckId && selectedDeckId && state === 'idle') {
+      joinQueue(selectedDeckId);
+    }
+  }, []);
 
   const animatedSearchStyle = useAnimatedStyle(() => ({
     transform: [

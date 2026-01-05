@@ -177,9 +177,19 @@ function handleAttack(state: GameState, action: GameAction): GameState {
   
   const payload = action.payload as AttackPayload;
   
+  // Set attack animation info BEFORE executing (so both players can see it)
+  let newState: GameState = {
+    ...state,
+    lastAttackAnimation: {
+      attackerId: payload.attackerId,
+      targetId: payload.targetId,
+      timestamp: Date.now(),
+    },
+  };
+  
   // Execute the attack
-  const attackResult = executeAttack(state, payload.attackerId, payload.targetId);
-  let newState = attackResult.state;
+  const attackResult = executeAttack(newState, payload.attackerId, payload.targetId);
+  newState = attackResult.state;
   
   // Process any triggered effects (on_attack, on_damaged, on_destroy)
   newState = processEffectQueue(newState);
@@ -307,26 +317,44 @@ export class GameInstance {
     return this.state;
   }
   
+  /**
+   * Update internal state from external source (e.g., server sync)
+   * Does NOT notify subscribers (to avoid loops)
+   */
+  setState(newState: GameState): void {
+    this.state = newState;
+  }
+  
   getHistory(): GameAction[] {
     return [...this.history];
   }
   
   dispatch(action: GameAction): GameState {
+    console.log('🎯 GameInstance.dispatch called!');
+    console.log('   Action type:', action.type);
+    console.log('   Subscribers count:', this.subscribers.length);
+    
     // Record action
     this.history.push(action);
     
     // Apply reducer
     this.state = gameReducer(this.state, action);
     
+    console.log('   New turn:', this.state.currentTurn);
+    console.log('   New active player:', this.state.activePlayerId?.slice(0, 8));
+    
     // Notify subscribers
+    console.log('   Notifying', this.subscribers.length, 'subscribers...');
     for (const subscriber of this.subscribers) {
       subscriber(this.state);
     }
+    console.log('   ✅ Dispatch complete');
     
     return this.state;
   }
   
   subscribe(callback: (state: GameState) => void): () => void {
+    console.log('📝 GameInstance.subscribe called! Total subscribers:', this.subscribers.length + 1);
     this.subscribers.push(callback);
     
     // Return unsubscribe function
@@ -334,6 +362,7 @@ export class GameInstance {
       const index = this.subscribers.indexOf(callback);
       if (index !== -1) {
         this.subscribers.splice(index, 1);
+        console.log('📝 Subscriber removed. Remaining:', this.subscribers.length);
       }
     };
   }

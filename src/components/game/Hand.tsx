@@ -15,9 +15,10 @@ interface HandProps {
   cards: CardInHandType[];
   bandwidth: number;
   isActive: boolean;
-  onPlayCard?: (cardId: string, position: number) => void;
+  onPlayCard?: (cardId: string, position: number) => void | Promise<void>;
   isHidden?: boolean; // For opponent's hand
   onCardLongPress?: (cardId: string) => void;
+  onCardDoubleTap?: (cardId: string) => void; // Double-tap to show card details
 }
 
 export default function Hand({
@@ -27,6 +28,7 @@ export default function Hand({
   onPlayCard,
   isHidden = false,
   onCardLongPress,
+  onCardDoubleTap,
 }: HandProps) {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -80,6 +82,7 @@ export default function Hand({
             onDragStart={() => setIsDragging(true)}
             onDragEnd={() => setIsDragging(false)}
             onLongPress={() => onCardLongPress?.(card.id)}
+            onDoubleTap={() => onCardDoubleTap?.(card.id)}
           />
         ))}
       </View>

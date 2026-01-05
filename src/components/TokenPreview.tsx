@@ -1,12 +1,14 @@
 import { View, StyleSheet, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CardKeyword, KEYWORD_INFO } from '../types/database';
 
 interface TokenPreviewProps {
   name: string;
   attack: number;
   health: number;
   imageUrl?: string;
+  keywords?: CardKeyword[];
   scale?: number;
 }
 
@@ -15,6 +17,7 @@ export default function TokenPreview({
   attack,
   health,
   imageUrl,
+  keywords = [],
   scale = 1,
 }: TokenPreviewProps) {
   const cardWidth = 120 * scale;
@@ -47,14 +50,27 @@ export default function TokenPreview({
 
         {/* Name */}
         <View style={[styles.nameContainer, { paddingVertical: 4 * scale, paddingHorizontal: 6 * scale }]}>
-          <Text 
-            style={[styles.name, { fontSize: 10 * scale }]} 
+          <Text
+            style={[styles.name, { fontSize: 10 * scale }]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
             {name || 'Token'}
           </Text>
         </View>
+
+        {/* Keywords */}
+        {keywords.length > 0 && (
+          <View style={[styles.keywordsContainer, { paddingHorizontal: 6 * scale, paddingVertical: 2 * scale }]}>
+            <View style={styles.keywordsRow}>
+              {keywords.slice(0, 3).map((kw) => (
+                <Text key={kw} style={[styles.keywordIcon, { fontSize: 8 * scale }]}>
+                  {KEYWORD_INFO[kw].icon}
+                </Text>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Stats */}
         <View style={[styles.statsContainer, { padding: 6 * scale }]}>
@@ -132,6 +148,19 @@ const styles = StyleSheet.create({
     color: '#e9d5ff',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  keywordsContainer: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  keywordsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  keywordIcon: {
+    color: '#a78bfa',
   },
   statsContainer: {
     flex: 1,

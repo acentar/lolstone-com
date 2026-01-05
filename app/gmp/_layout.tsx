@@ -39,31 +39,56 @@ export default function GMPLayout() {
   const { width } = useWindowDimensions();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(width < 768);
 
+  console.log('GMP Layout render - pathname:', pathname, 'loading:', loading, 'user:', !!user, 'isGM:', isGameMaster);
+
   const isSmallScreen = width < 768;
   const sidebarWidth = sidebarCollapsed ? 72 : 240;
 
-  // Authentication protection for GMP
+  // Allow login page to render without auth check
+  const isLoginPage = pathname === '/gmp/login';
+
+  // Redirect to login if not authenticated
   useEffect(() => {
-    if (loading) return; // Still loading auth state
-
-    // Allow access to login page
-    if (pathname === '/gmp/login') return;
-
-    // Check if user is authenticated and is a Game Master
+    console.log('GMP Layout: pathname:', pathname, 'loading:', loading, 'user:', !!user, 'isGM:', isGameMaster);
+    
+    // Skip redirects while loading or on login page
+    if (loading || isLoginPage) return;
+    
+    // Redirect to login if no user
     if (!user) {
-      console.log('GMP: No user, redirecting to GMP login');
+      console.log('GMP Layout: No user, redirecting to login');
       router.replace('/gmp/login');
       return;
     }
-
+    
+    // Redirect to landing if not a GM
     if (!isGameMaster) {
-      console.log('GMP: User is not Game Master, redirecting to landing');
+      console.log('GMP Layout: Not a GM, redirecting to landing');
       router.replace('/');
       return;
     }
+  }, [pathname, loading, user, isGameMaster, router, isLoginPage]);
 
-    console.log('GMP: Access granted for Game Master');
-  }, [loading, user, isGameMaster, pathname, router]);
+  // Show login page without any GMP chrome
+  if (isLoginPage) {
+    return (
+      <PaperProvider theme={paperTheme}>
+        <Slot />
+      </PaperProvider>
+    );
+  }
+
+  // Show loading while checking auth or redirecting
+  if (loading || !user || !isGameMaster) {
+    return (
+      <PaperProvider theme={paperTheme}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>🃏</Text>
+          <Text style={styles.loadingSubtext}>Loading...</Text>
+        </View>
+      </PaperProvider>
+    );
+  }
 
   const navItems = [
     { icon: '📊', label: 'Dashboard', href: '/gmp' },
@@ -80,7 +105,7 @@ export default function GMPLayout() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace('/auth/login');
+    router.replace('/gmp/login');
   };
 
   return (
@@ -320,5 +345,21 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     backgroundColor: adminColors.background,
+  },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: adminColors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 64,
+    marginBottom: adminSpacing.md,
+  },
+  loadingSubtext: {
+    color: adminColors.textSecondary,
+    fontSize: 16,
   },
 });

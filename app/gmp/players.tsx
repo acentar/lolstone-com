@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { 
-  Text, Card, Button, TextInput, Searchbar, Avatar, 
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Pressable } from 'react-native';
+import {
+  Text, Card, Button, TextInput, Searchbar, Avatar,
   Chip, Modal, Portal, Divider, IconButton, DataTable,
   Menu,
 } from 'react-native-paper';
@@ -54,6 +54,18 @@ export default function PlayersScreen() {
   // Delete state
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<PlayerWithStats | null>(null);
+
+  // Give cards state
+  const [giveCardsModalVisible, setGiveCardsModalVisible] = useState(false);
+  const [availableCardDesigns, setAvailableCardDesigns] = useState<Array<{
+    design: CardDesign;
+    availableCount: number;
+    instances: Array<{ id: string; serial_number: number }>;
+  }>>([]);
+  const [loadingAvailableCards, setLoadingAvailableCards] = useState(false);
+  const [givingCard, setGivingCard] = useState(false);
+  const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
+  const [giveQuantity, setGiveQuantity] = useState(1);
   
   // Menu state
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
@@ -105,7 +117,8 @@ export default function PlayersScreen() {
   const filteredPlayers = players.filter(
     (p) =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.username.toLowerCase().includes(searchQuery.toLowerCase())
+      p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.email && p.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const handleGrantDucats = async () => {
@@ -280,6 +293,161 @@ export default function PlayersScreen() {
     }
   };
 
+  const loadAvailableCards = async () => {
+    setLoadingAvailableCards(true);
+    console.log('🎁 Loading available cards for giving...');
+    
+    try {
+      // NEW APPROACH: Start from card_designs, then check each for unowned instances
+      // This avoids the 1000 row limit issue on card_instances
+      
+      // STEP 1: Get all card designs that have been minted
+      const { data: allDesigns, error: allDesignsError } = await supabase
+        .from('card_designs')
+        .select('*')
+        .gt('total_minted', 0)
+        .eq('is_active', true);
+      
+      if (allDesignsError) {
+        console.error('🎁 Error fetching card designs:', allDesignsError);
+        throw allDesignsError;
+      }
+      
+      console.log('🎁 Designs with mints:', allDesigns?.length || 0);
+      allDesigns?.forEach(d => console.log(`  📋 ${d.name}: ${d.total_minted} minted`));
+      
+      if (!allDesigns || allDesigns.length === 0) {
+        console.log('🎁 No designs with mints found');
+        setAvailableCardDesigns([]);
+        setLoadingAvailableCards(false);
+        return;
+      }
+
+      // STEP 2: For EACH design, check how many unowned instances exist
+      const groupedDesigns: Array<{
+        design: CardDesign;
+        availableCount: number;
+        instances: Array<{ id: string; serial_number: number }>;
+      }> = [];
+
+      for (const design of allDesigns) {
+        // Get count of unowned instances for this design
+        const { count, error: countError } = await supabase
+          .from('card_instances')
+          .select('*', { count: 'exact', head: true })
+          .eq('design_id', design.id)
+          .is('owner_id', null);
+
+        if (countError) {
+          console.warn('🎁 Error counting instances for', design.name, ':', countError.message);
+          continue;
+        }
+
+        console.log(`🎁 ${design.name}: ${count || 0} unowned instances`);
+
+        if (!count || count === 0) {
+          console.log(`  ⏭️ Skipping ${design.name} - no unowned instances`);
+          continue;
+        }
+
+        // Get some actual instances (limit 100 per design for giving)
+        const { data: instancesForDesign, error: instancesError } = await supabase
+          .from('card_instances')
+          .select('id, serial_number')
+          .eq('design_id', design.id)
+          .is('owner_id', null)
+          .limit(100);
+
+        if (instancesError) {
+          console.warn('🎁 Error fetching instances for', design.name, ':', instancesError.message);
+          continue;
+        }
+
+        groupedDesigns.push({
+          design,
+          availableCount: count,
+          instances: instancesForDesign || [],
+        });
+      }
+
+      // Sort by available count (most available first)
+      groupedDesigns.sort((a, b) => b.availableCount - a.availableCount);
+
+      console.log('🎁 Final grouped designs with unowned cards:', groupedDesigns.length);
+      groupedDesigns.forEach(g => console.log(`  ✅ ${g.design.name}: ${g.availableCount} available`));
+
+      setAvailableCardDesigns(groupedDesigns);
+    } catch (error) {
+      console.error('🎁 Error loading available cards:', error);
+      setAvailableCardDesigns([]);
+    } finally {
+      setLoadingAvailableCards(false);
+    }
+  };
+
+  const handleGiveCards = async (designId: string, quantity: number) => {
+    if (!selectedPlayer) return;
+
+    const designEntry = availableCardDesigns.find(d => d.design.id === designId);
+    if (!designEntry) return;
+
+    const cardName = designEntry.design.name;
+    const instancesToGive = designEntry.instances.slice(0, quantity);
+
+    if (instancesToGive.length === 0) {
+      Alert.alert('Error', 'No cards available to give');
+      return;
+    }
+
+    setGivingCard(true);
+    try {
+      // Transfer card ownership to the player for all selected instances
+      const { error } = await supabase
+        .from('card_instances')
+        .update({ owner_id: selectedPlayer.id })
+        .in('id', instancesToGive.map(i => i.id));
+
+      if (error) throw error;
+
+      // Create transaction record
+      await supabase.from('transactions').insert({
+        type: 'give_card',
+        to_player_id: selectedPlayer.id,
+        description: `GM gave ${quantity}x ${cardName} card${quantity > 1 ? 's' : ''}`,
+      });
+
+      Alert.alert(
+        '✅ Cards Given!',
+        `${quantity}x ${cardName} ${quantity > 1 ? 'have' : 'has'} been given to @${selectedPlayer.username}\n\nThey can now use ${quantity > 1 ? 'these cards' : 'this card'} in their deck!`
+      );
+
+      // Update local player stats
+      setSelectedPlayer(prev => prev ? {
+        ...prev,
+        cards_count: prev.cards_count + quantity
+      } : null);
+
+      // Reset selection
+      setSelectedDesignId(null);
+      setGiveQuantity(1);
+
+      // Refresh the available cards list
+      loadAvailableCards();
+      fetchPlayers();
+
+    } catch (error) {
+      console.error('Error giving cards:', error);
+      Alert.alert('Error', 'Failed to give cards to player');
+    } finally {
+      setGivingCard(false);
+    }
+  };
+
+  const openGiveCardsModal = () => {
+    setGiveCardsModalVisible(true);
+    loadAvailableCards();
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchPlayers();
@@ -373,6 +541,7 @@ export default function PlayersScreen() {
             <DataTable>
               <DataTable.Header>
                 <DataTable.Title>Player</DataTable.Title>
+                <DataTable.Title>Email</DataTable.Title>
                 <DataTable.Title numeric>Cards</DataTable.Title>
                 <DataTable.Title numeric>Balance</DataTable.Title>
                 <DataTable.Title numeric>Actions</DataTable.Title>
@@ -396,6 +565,9 @@ export default function PlayersScreen() {
                         <Text style={styles.username}>@{player.username}</Text>
                       </View>
                     </View>
+                  </DataTable.Cell>
+                  <DataTable.Cell>
+                    <Text style={styles.emailText}>{player.email || '-'}</Text>
                   </DataTable.Cell>
                   <DataTable.Cell numeric>
                     <Text style={styles.cardsCount}>🃏 {player.cards_count}</Text>
@@ -434,13 +606,22 @@ export default function PlayersScreen() {
                         title="Edit Player"
                         leadingIcon="pencil"
                       />
-                      <Menu.Item 
+                      <Menu.Item
                         onPress={() => {
                           setMenuVisible(null);
                           openPlayerModal(player);
-                        }} 
+                        }}
                         title="Give Ducats"
                         leadingIcon="currency-usd"
+                      />
+                      <Menu.Item
+                        onPress={() => {
+                          setMenuVisible(null);
+                          setSelectedPlayer(player);
+                          openGiveCardsModal();
+                        }}
+                        title="Give Cards"
+                        leadingIcon="cards"
                       />
                       <Divider />
                       <Menu.Item 
@@ -545,6 +726,9 @@ export default function PlayersScreen() {
                       <>
                         <Text style={styles.profileName}>{selectedPlayer.name}</Text>
                         <Text style={styles.profileUsername}>@{selectedPlayer.username}</Text>
+                        {selectedPlayer.email && (
+                          <Text style={styles.profileEmail}>{selectedPlayer.email}</Text>
+                        )}
                       </>
                     )}
                   </View>
@@ -733,6 +917,142 @@ export default function PlayersScreen() {
         </Modal>
       </Portal>
 
+      {/* Give Cards Modal */}
+      <Portal>
+        <Modal
+          visible={giveCardsModalVisible}
+          onDismiss={() => {
+            setGiveCardsModalVisible(false);
+            setSelectedDesignId(null);
+            setGiveQuantity(1);
+          }}
+          contentContainerStyle={styles.giveCardsModal}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              🎁 Give Cards to {selectedPlayer?.name}
+            </Text>
+            <IconButton
+              icon="close"
+              onPress={() => {
+                setGiveCardsModalVisible(false);
+                setSelectedDesignId(null);
+                setGiveQuantity(1);
+              }}
+            />
+          </View>
+
+          <Text style={styles.giveCardsDescription}>
+            Select a card design and choose how many to give. Cards will be transferred from the minted pool.
+          </Text>
+
+          {loadingAvailableCards ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading available cards...</Text>
+            </View>
+          ) : availableCardDesigns.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>📦</Text>
+              <Text style={styles.emptyTitle}>No Cards Available</Text>
+              <Text style={styles.emptyText}>
+                All minted cards have been distributed.{'\n'}Create and mint more cards first.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={styles.cardsList}>
+              {availableCardDesigns.map((entry) => {
+                const isSelected = selectedDesignId === entry.design.id;
+                const maxQuantity = entry.availableCount;
+                
+                return (
+                  <Pressable
+                    key={entry.design.id}
+                    style={[
+                      styles.availableCardItem,
+                      isSelected && styles.availableCardItemSelected,
+                    ]}
+                    onPress={() => {
+                      if (isSelected) {
+                        setSelectedDesignId(null);
+                        setGiveQuantity(1);
+                      } else {
+                        setSelectedDesignId(entry.design.id);
+                        setGiveQuantity(1);
+                      }
+                    }}
+                  >
+                    <View style={styles.cardPreview}>
+                      <CardPreview
+                        name={entry.design.name}
+                        manaCost={entry.design.mana_cost}
+                        attack={entry.design.attack ?? undefined}
+                        health={entry.design.health ?? undefined}
+                        rarity={entry.design.rarity}
+                        category={entry.design.category}
+                        imageUrl={entry.design.image_url ?? undefined}
+                        cardType={entry.design.card_type}
+                        scale={0.4}
+                      />
+                    </View>
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.cardName}>{entry.design.name}</Text>
+                      <Text style={styles.cardDetails}>
+                        {entry.design.rarity.toUpperCase()}
+                      </Text>
+                      <Chip 
+                        style={styles.availableChip}
+                        textStyle={styles.availableChipText}
+                      >
+                        {entry.availableCount} available
+                      </Chip>
+                    </View>
+                    
+                    {isSelected ? (
+                      <View style={styles.quantitySelector}>
+                        <Text style={styles.quantityLabel}>Qty:</Text>
+                        <View style={styles.quantityControls}>
+                          <IconButton
+                            icon="minus"
+                            size={16}
+                            onPress={() => setGiveQuantity(Math.max(1, giveQuantity - 1))}
+                            disabled={giveQuantity <= 1}
+                            style={styles.quantityButton}
+                          />
+                          <Text style={styles.quantityValue}>{giveQuantity}</Text>
+                          <IconButton
+                            icon="plus"
+                            size={16}
+                            onPress={() => setGiveQuantity(Math.min(maxQuantity, giveQuantity + 1))}
+                            disabled={giveQuantity >= maxQuantity}
+                            style={styles.quantityButton}
+                          />
+                        </View>
+                        <Button
+                          mode="contained"
+                          onPress={() => handleGiveCards(entry.design.id, giveQuantity)}
+                          loading={givingCard}
+                          disabled={givingCard}
+                          style={styles.giveCardButton}
+                          compact
+                        >
+                          Give {giveQuantity}
+                        </Button>
+                      </View>
+                    ) : (
+                      <IconButton
+                        icon="chevron-right"
+                        size={20}
+                        style={styles.selectIndicator}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+        </Modal>
+      </Portal>
+
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         visible={deleteModalVisible}
@@ -861,6 +1181,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: adminColors.textSecondary,
   },
+  emailText: {
+    fontSize: 12,
+    color: adminColors.textSecondary,
+  },
   cardsCount: {
     fontSize: 13,
     color: adminColors.textSecondary,
@@ -917,6 +1241,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: adminColors.textSecondary,
     marginTop: 4,
+  },
+  profileEmail: {
+    fontSize: 12,
+    color: adminColors.accent,
+    marginTop: 2,
   },
   profileStats: {
     flexDirection: 'row',
@@ -1077,5 +1406,127 @@ const styles = StyleSheet.create({
   },
   amountNegative: {
     color: adminColors.error,
+  },
+
+  // Give Cards Modal
+  giveCardsModal: {
+    backgroundColor: adminColors.surface,
+    margin: adminSpacing.lg,
+    padding: adminSpacing.lg,
+    borderRadius: adminRadius.lg,
+    maxHeight: '90%',
+  },
+  giveCardsDescription: {
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    marginBottom: adminSpacing.lg,
+    lineHeight: 20,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: adminSpacing.xl,
+  },
+  loadingText: {
+    color: adminColors.textSecondary,
+    fontSize: 14,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: adminSpacing.xl,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: adminSpacing.md,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.xs,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  cardsList: {
+    maxHeight: 400,
+  },
+  availableCardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: adminSpacing.md,
+    backgroundColor: adminColors.background,
+    borderRadius: adminRadius.md,
+    marginBottom: adminSpacing.sm,
+    borderWidth: 1,
+    borderColor: adminColors.border,
+  },
+  cardPreview: {
+    marginRight: adminSpacing.md,
+  },
+  cardInfo: {
+    flex: 1,
+  },
+  cardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    marginBottom: 2,
+  },
+  cardDetails: {
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    marginBottom: 4,
+  },
+  giveCardButton: {
+    minWidth: 70,
+  },
+  availableCardItemSelected: {
+    borderColor: adminColors.primary,
+    borderWidth: 2,
+    backgroundColor: adminColors.primary + '10',
+  },
+  availableChip: {
+    backgroundColor: adminColors.success + '20',
+    alignSelf: 'flex-start',
+    height: 24,
+  },
+  availableChipText: {
+    fontSize: 11,
+    color: adminColors.success,
+  },
+  quantitySelector: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  quantityLabel: {
+    fontSize: 11,
+    color: adminColors.textSecondary,
+    fontWeight: '500',
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.md,
+    borderWidth: 1,
+    borderColor: adminColors.border,
+  },
+  quantityButton: {
+    margin: 0,
+    borderRadius: 0,
+  },
+  quantityValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: adminColors.textPrimary,
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  selectIndicator: {
+    margin: 0,
+    opacity: 0.5,
   },
 });

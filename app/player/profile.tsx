@@ -1,18 +1,46 @@
-import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Text, Button, Avatar, Divider } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
+import { Text, Button, Avatar, Divider, IconButton } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useAuthContext } from '../../src/context/AuthContext';
-import { spacing } from '../../src/constants/theme';
+import { colors, spacing } from '../../src/constants/theme';
+
+const { width } = Dimensions.get('window');
+const isDesktop = width >= 900;
 
 export default function ProfileScreen() {
   const { player, signOut } = useAuthContext();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.replace('/');
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
 
   return (
-    <LinearGradient
-      colors={['#0f172a', '#1e293b', '#0f172a']}
-      style={styles.container}
-    >
-      <ScrollView 
+    <View style={styles.container}>
+      {/* Header */}
+      <LinearGradient
+        colors={[colors.surface, colors.background]}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <IconButton
+            icon="arrow-left"
+            size={24}
+            onPress={() => router.back()}
+            style={styles.backButton}
+          />
+          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={{ width: 48 }} />
+        </View>
+      </LinearGradient>
+
+      <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -38,93 +66,179 @@ export default function ProfileScreen() {
         </View>
 
         {/* Balance Card */}
-        <View style={styles.balanceCard}>
+        <LinearGradient
+          colors={[colors.primary + '10', colors.primary + '05']}
+          style={styles.balanceCard}
+        >
           <View style={styles.balanceRow}>
-            <Text style={styles.balanceLabel}>💰 Ducats Balance</Text>
+            <View>
+              <Text style={styles.balanceLabel}>💰 Ducats Balance</Text>
+              <Text style={styles.balanceSubLabel}>Available currency</Text>
+            </View>
             <Text style={styles.balanceValue}>
               {player?.ducats?.toLocaleString() || 0}
             </Text>
           </View>
-        </View>
+        </LinearGradient>
 
         <Divider style={styles.divider} />
 
         {/* Stats Section */}
-        <Text style={styles.sectionTitle}>Statistics</Text>
+        <Text style={styles.sectionTitle}>📊 Your Statistics</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>0</Text>
-            <Text style={styles.statLabel}>Games Won</Text>
+            <LinearGradient
+              colors={[colors.primary + '15', colors.primary + '05']}
+              style={styles.statCard}
+            >
+              <Text style={styles.statValue}>0</Text>
+              <Text style={styles.statLabel}>Games Won</Text>
+            </LinearGradient>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>0</Text>
-            <Text style={styles.statLabel}>Games Lost</Text>
+            <LinearGradient
+              colors={[colors.secondary + '15', colors.secondary + '05']}
+              style={styles.statCard}
+            >
+              <Text style={styles.statValue}>0</Text>
+              <Text style={styles.statLabel}>Games Lost</Text>
+            </LinearGradient>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>0%</Text>
-            <Text style={styles.statLabel}>Win Rate</Text>
+            <LinearGradient
+              colors={[colors.primary + '10', colors.secondary + '10']}
+              style={styles.statCard}
+            >
+              <Text style={styles.statValue}>0%</Text>
+              <Text style={styles.statLabel}>Win Rate</Text>
+            </LinearGradient>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>0</Text>
-            <Text style={styles.statLabel}>Cards Owned</Text>
+            <LinearGradient
+              colors={[colors.secondary + '10', colors.primary + '10']}
+              style={styles.statCard}
+            >
+              <Text style={styles.statValue}>0</Text>
+              <Text style={styles.statLabel}>Cards Owned</Text>
+            </LinearGradient>
           </View>
         </View>
 
         <Divider style={styles.divider} />
 
         {/* Settings */}
-        <Text style={styles.sectionTitle}>Account</Text>
-        
+        <Text style={styles.sectionTitle}>⚙️ Account Settings</Text>
+
         <Pressable style={styles.menuItem}>
-          <Text style={styles.menuIcon}>✏️</Text>
-          <Text style={styles.menuText}>Edit Profile</Text>
+          <LinearGradient
+            colors={[colors.surface, colors.background]}
+            style={styles.menuItemGradient}
+          >
+            <Text style={styles.menuIcon}>✏️</Text>
+            <View style={styles.menuTextContainer}>
+              <Text style={styles.menuText}>Edit Profile</Text>
+              <Text style={styles.menuSubText}>Update your name and avatar</Text>
+            </View>
+            <IconButton icon="chevron-right" size={20} iconColor={colors.textSecondary} />
+          </LinearGradient>
         </Pressable>
-        
+
         <Pressable style={styles.menuItem}>
-          <Text style={styles.menuIcon}>🔔</Text>
-          <Text style={styles.menuText}>Notifications</Text>
+          <LinearGradient
+            colors={[colors.surface, colors.background]}
+            style={styles.menuItemGradient}
+          >
+            <Text style={styles.menuIcon}>🔔</Text>
+            <View style={styles.menuTextContainer}>
+              <Text style={styles.menuText}>Notifications</Text>
+              <Text style={styles.menuSubText}>Manage game alerts</Text>
+            </View>
+            <IconButton icon="chevron-right" size={20} iconColor={colors.textSecondary} />
+          </LinearGradient>
         </Pressable>
-        
+
         <Pressable style={styles.menuItem}>
-          <Text style={styles.menuIcon}>🎮</Text>
-          <Text style={styles.menuText}>Game Settings</Text>
+          <LinearGradient
+            colors={[colors.surface, colors.background]}
+            style={styles.menuItemGradient}
+          >
+            <Text style={styles.menuIcon}>🎮</Text>
+            <View style={styles.menuTextContainer}>
+              <Text style={styles.menuText}>Game Settings</Text>
+              <Text style={styles.menuSubText}>Customize your experience</Text>
+            </View>
+            <IconButton icon="chevron-right" size={20} iconColor={colors.textSecondary} />
+          </LinearGradient>
         </Pressable>
-        
+
         <Pressable style={styles.menuItem}>
-          <Text style={styles.menuIcon}>❓</Text>
-          <Text style={styles.menuText}>Help & Support</Text>
+          <LinearGradient
+            colors={[colors.surface, colors.background]}
+            style={styles.menuItemGradient}
+          >
+            <Text style={styles.menuIcon}>❓</Text>
+            <View style={styles.menuTextContainer}>
+              <Text style={styles.menuText}>Help & Support</Text>
+              <Text style={styles.menuSubText}>Get assistance and FAQ</Text>
+            </View>
+            <IconButton icon="chevron-right" size={20} iconColor={colors.textSecondary} />
+          </LinearGradient>
         </Pressable>
 
         <Divider style={styles.divider} />
 
         {/* Logout */}
         <Button
-          mode="outlined"
-          onPress={signOut}
+          mode="contained"
+          onPress={handleSignOut}
           style={styles.logoutButton}
-          textColor="#ef4444"
+          buttonColor="#ef4444"
+          textColor="#ffffff"
         >
-          Log Out
+          Sign Out
         </Button>
 
         {/* App Info */}
         <Text style={styles.versionText}>Lolstone v1.0.0</Text>
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    minHeight: isDesktop ? 60 : 50,
+  },
+  backButton: {
+    margin: 0,
+  },
+  headerTitle: {
+    fontSize: isDesktop ? 20 : 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    flex: 1,
   },
   scroll: {
     flex: 1,
   },
   content: {
-    paddingTop: 60,
     paddingHorizontal: spacing.lg,
-    paddingBottom: 100,
+    paddingVertical: spacing.xl,
+    paddingBottom: 120,
   },
   profileHeader: {
     alignItems: 'center',
@@ -134,17 +248,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: isDesktop ? 120 : 100,
+    height: isDesktop ? 120 : 100,
+    borderRadius: 60,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#60a5fa',
+    borderColor: colors.primary,
   },
   avatarLetter: {
-    color: '#fff',
-    fontSize: 40,
+    color: colors.background,
+    fontSize: isDesktop ? 24 : 20,
     fontWeight: '700',
   },
   playerName: {
@@ -158,11 +272,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   balanceCard: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderRadius: 12,
-    padding: spacing.md,
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderColor: colors.border,
   },
   balanceRow: {
     flexDirection: 'row',
@@ -235,10 +349,81 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   versionText: {
-    color: '#64748b',
+    color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
     marginTop: spacing.xl,
+  },
+
+  // Stats Grid
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  statItem: {
+    flex: 1,
+    minWidth: isDesktop ? 120 : 100,
+  },
+  statCard: {
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  statValue: {
+    fontSize: isDesktop ? 24 : 20,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Menu Items
+  menuItem: {
+    marginBottom: spacing.sm,
+  },
+  menuItemGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  menuIcon: {
+    fontSize: 20,
+    marginRight: spacing.md,
+    width: 24,
+    textAlign: 'center',
+  },
+  menuTextContainer: {
+    flex: 1,
+  },
+  menuText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  menuSubText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+
+  // Enhanced Logout Button
+  logoutButton: {
+    marginTop: spacing.lg,
+    borderRadius: 12,
+    paddingVertical: spacing.sm,
   },
 });
 

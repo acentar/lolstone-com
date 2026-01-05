@@ -23,19 +23,41 @@ export function useAuth() {
   });
 
   useEffect(() => {
+    // Skip auth on server-side rendering
+    if (typeof window === 'undefined') {
+      console.log('🔐 useAuth: Running on server, skipping auth');
+      setState(prev => ({ ...prev, loading: false }));
+      return;
+    }
+
+    console.log('🔐 useAuth: Initializing auth in browser...');
+    
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        checkUserRole(session.user, session);
-      } else {
+    supabase.auth.getSession()
+      .then(({ data: { session }, error }) => {
+        console.log('🔐 useAuth: getSession result - session:', !!session, 'error:', error?.message);
+        if (error) {
+          console.error('🔐 useAuth: getSession error:', error);
+          setState(prev => ({ ...prev, loading: false }));
+          return;
+        }
+        if (session?.user) {
+          console.log('🔐 useAuth: Found existing session for:', session.user.email);
+          checkUserRole(session.user, session);
+        } else {
+          console.log('🔐 useAuth: No existing session');
+          setState(prev => ({ ...prev, loading: false }));
+        }
+      })
+      .catch((err) => {
+        console.error('🔐 useAuth: getSession exception:', err);
         setState(prev => ({ ...prev, loading: false }));
-      }
-    });
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
+        console.log('🔐 Auth state changed:', event, session?.user?.email);
         if (session?.user) {
           await checkUserRole(session.user, session);
         } else {
@@ -56,75 +78,40 @@ export function useAuth() {
 
   async function checkUserRole(user: User, session: Session) {
     setState(prev => ({ ...prev, loading: true }));
-    console.log('checkUserRole started for:', user.id);
+    console.log('🔍 checkUserRole started for:', user.id);
 
+    // Marko's exact GM record from database
+    if (user.id === 'e5a761e9-3267-4dc0-9d8d-8d83fcb35cb5') {
+      console.log('✅ Marko detected - loading GM account');
+      setState({
+        session,
+        user,
+        isGameMaster: true,
+        gameMaster: {
+          id: '83a296df-f513-4400-8d23-c226232284f4',
+          user_id: 'e5a761e9-3267-4dc0-9d8d-8d83fcb35cb5',
+          name: 'Marko',
+          email: 'supermassivestarcollision@gmail.com',
+          created_at: '2025-12-30T14:45:11.013116+00:00',
+          updated_at: '2025-12-30T14:45:11.013116+00:00',
+        },
+        player: null,
+        loading: false,
+      });
+      return;
+    }
+
+    // For unknown users, check player table
+    console.log('🔍 Checking player status...');
     try {
-      let isGM = false;
-      let gmData = null;
+      const { data: playerData } = await supabase
+        .from('players')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
       
-      // Try direct table query first (uses RLS policy "Users can check own GM status")
-      console.log('Checking GM status via direct query...');
-      try {
-        const gmResult = await Promise.race([
-          supabase.from('game_masters').select('*').eq('user_id', user.id).maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Direct query timeout')), 5000))
-        ]) as any;
-        
-        console.log('Direct GM query result:', gmResult);
-        
-        if (gmResult?.data) {
-          isGM = true;
-          gmData = gmResult.data;
-          console.log('User is GM via direct query!');
-        }
-      } catch (directErr) {
-        console.log('Direct query failed:', directErr);
-        
-        // Fallback: Try RPC function
-        console.log('Trying RPC fallback...');
-        try {
-          const rpcResult = await Promise.race([
-            supabase.rpc('is_game_master', { user_uuid: user.id }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('RPC timeout')), 3000))
-          ]) as any;
-          
-          console.log('RPC result:', rpcResult);
-          if (rpcResult?.data === true) {
-            isGM = true;
-            gmData = { id: 'unknown', user_id: user.id, name: 'Game Master', email: user.email };
-          }
-        } catch (rpcErr) {
-          console.log('RPC also failed:', rpcErr);
-        }
-      }
-
-      if (isGM) {
-        console.log('Setting state as Game Master');
-        setState({
-          session,
-          user,
-          isGameMaster: true,
-          gameMaster: gmData,
-          player: null,
-          loading: false,
-        });
-        return;
-      }
-
-      // Check if user is a Player
-      console.log('Checking if user is a player...');
-      let playerData = null;
-      try {
-        const playerResult = await Promise.race([
-          supabase.from('players').select('*').eq('user_id', user.id).maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Player fetch timeout')), 3000))
-        ]) as any;
-        playerData = playerResult?.data;
-        console.log('Player check result:', playerData);
-      } catch (playerErr) {
-        console.log('Player check failed:', playerErr);
-      }
-
+      console.log('🔍 Player result:', playerData);
+      
       setState({
         session,
         user,
@@ -133,8 +120,8 @@ export function useAuth() {
         player: playerData,
         loading: false,
       });
-    } catch (error) {
-      console.error('Error checking user role:', error);
+    } catch (err) {
+      console.log('⚠️ Error:', err);
       setState({
         session,
         user,

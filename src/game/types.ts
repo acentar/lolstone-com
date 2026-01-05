@@ -116,6 +116,13 @@ export interface GameState {
   // Animation/UI state
   lastAction: GameAction | null;
   
+  // Attack animation state (synced to both players)
+  lastAttackAnimation: {
+    attackerId: string;
+    targetId: string;
+    timestamp: number;
+  } | null;
+  
   // Timestamps
   createdAt: number;
   turnStartedAt: number;

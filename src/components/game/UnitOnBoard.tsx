@@ -2,10 +2,10 @@
  * Unit On Board Component
  * 
  * Displays a unit that's currently on the battlefield.
- * Handles attack animations and visual states.
+ * Handles attack animations, damage indicators, and visual states.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Pressable, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import Animated, {
@@ -14,7 +14,15 @@ import Animated, {
   withSpring,
   withSequence,
   withTiming,
+  withDelay,
   runOnJS,
+  Easing,
+  interpolateColor,
+  FadeIn,
+  FadeOut,
+  ZoomIn,
+  ZoomOut,
+  SlideInUp,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { UnitInPlay } from '../../game/types';
@@ -26,9 +34,49 @@ interface UnitOnBoardProps {
   canAttack: boolean;
   isValidTarget: boolean;
   isAttacking?: boolean;
+  isChargingAttack?: boolean;  // Unit is currently charging toward target
+  isBeingAttacked?: boolean;   // Unit is being attacked
+  attackingUp?: boolean;       // Direction of charge (up = toward opponent)
   onSelect?: () => void;
   onAttackTarget?: () => void;
   onLongPress?: () => void;
+  onDoubleTap?: () => void;    // Double tap to view card details
+}
+
+// Floating damage number component
+function DamageNumber({ amount, onComplete }: { amount: number; onComplete: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 1500);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <Animated.View
+      entering={ZoomIn.duration(200)}
+      exiting={FadeOut.duration(300)}
+      style={styles.damageNumber}
+    >
+      <Text style={styles.damageText}>-{amount}</Text>
+    </Animated.View>
+  );
+}
+
+// Heal number component  
+function HealNumber({ amount, onComplete }: { amount: number; onComplete: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 1500);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <Animated.View
+      entering={SlideInUp.duration(300)}
+      exiting={FadeOut.duration(300)}
+      style={styles.healNumber}
+    >
+      <Text style={styles.healText}>+{amount}</Text>
+    </Animated.View>
+  );
 }
 
 const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = {
@@ -39,39 +87,226 @@ const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = 
   legendary: { border: ['#b45309', '#f59e0b', '#dc2626'], accent: '#f59e0b' },
 };
 
+// Impact explosion component
+function ImpactExplosion({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 600);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <Animated.View
+      entering={ZoomIn.duration(150).springify()}
+      exiting={FadeOut.duration(200)}
+      style={impactStyles.container}
+    >
+      <View style={impactStyles.ring1} />
+      <View style={impactStyles.ring2} />
+      <View style={impactStyles.ring3} />
+      <Text style={impactStyles.impactText}>💥</Text>
+    </Animated.View>
+  );
+}
+
+const impactStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 80,
+    height: 80,
+    marginLeft: -40,
+    marginTop: -40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 300,
+  },
+  ring1: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 3,
+    borderColor: '#f59e0b',
+    opacity: 0.8,
+  },
+  ring2: {
+    position: 'absolute',
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    borderWidth: 2,
+    borderColor: '#ef4444',
+    opacity: 0.6,
+  },
+  ring3: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  impactText: {
+    fontSize: 32,
+    zIndex: 10,
+  },
+});
+
 export default function UnitOnBoard({
   unit,
   isOwned,
   canAttack,
   isValidTarget,
   isAttacking = false,
+  isChargingAttack = false,
+  isBeingAttacked = false,
+  attackingUp = true,
   onSelect,
   onAttackTarget,
   onLongPress,
+  onDoubleTap,
 }: UnitOnBoardProps) {
+  // Double tap detection
+  const lastTapRef = useRef<number>(0);
+  const DOUBLE_TAP_DELAY = 300;
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
+  const translateX = useSharedValue(0);
   const shake = useSharedValue(0);
+  const flashOpacity = useSharedValue(0);
+  const rotation = useSharedValue(0);
+  
+  // Track previous health for damage animations
+  const prevHealthRef = useRef(unit.currentHealth);
+  const [damageAmount, setDamageAmount] = useState<number | null>(null);
+  const [healAmount, setHealAmount] = useState<number | null>(null);
+  const [showImpact, setShowImpact] = useState(false);
 
   const design = unit.design;
   const rarityConfig = RARITY_COLORS[design.rarity];
 
-  // Attack animation
+  // Detect health changes and trigger animations
   useEffect(() => {
-    if (isAttacking) {
+    const prevHealth = prevHealthRef.current;
+    const currentHealth = unit.currentHealth;
+    
+    if (prevHealth !== currentHealth) {
+      const diff = prevHealth - currentHealth;
+      
+      if (diff > 0) {
+        // Unit took damage!
+        console.log(`💥 ${unit.design.name} took ${diff} damage!`);
+        setDamageAmount(diff);
+        
+        // Shake animation
+        shake.value = withSequence(
+          withTiming(-8, { duration: 50 }),
+          withTiming(8, { duration: 50 }),
+          withTiming(-6, { duration: 50 }),
+          withTiming(6, { duration: 50 }),
+          withTiming(-3, { duration: 50 }),
+          withTiming(0, { duration: 50 })
+        );
+        
+        // Red flash
+        flashOpacity.value = withSequence(
+          withTiming(0.6, { duration: 100 }),
+          withTiming(0, { duration: 400 })
+        );
+      } else if (diff < 0) {
+        // Unit was healed!
+        setHealAmount(Math.abs(diff));
+        
+        // Scale up slightly
+        scale.value = withSequence(
+          withTiming(1.1, { duration: 200 }),
+          withTiming(1, { duration: 200 })
+        );
+      }
+      
+      prevHealthRef.current = currentHealth;
+    }
+  }, [unit.currentHealth, unit.design.name]);
+
+  // Charging attack animation - dramatic charge toward target
+  useEffect(() => {
+    if (isChargingAttack) {
+      // Direction: negative Y = up (toward opponent), positive = down
+      const chargeDistance = attackingUp ? -60 : 60;
+      const rotationAmount = attackingUp ? -5 : 5;
+      
+      // Wind up, then charge!
       translateY.value = withSequence(
-        withTiming(-30, { duration: 150 }),
-        withTiming(0, { duration: 150 })
+        // Wind up - pull back slightly
+        withTiming(attackingUp ? 8 : -8, { duration: 100, easing: Easing.out(Easing.ease) }),
+        // CHARGE! - lunge forward aggressively
+        withTiming(chargeDistance, { duration: 200, easing: Easing.out(Easing.exp) }),
+        // Hold at impact position briefly
+        withDelay(150, withTiming(0, { duration: 250, easing: Easing.out(Easing.bounce) }))
+      );
+      
+      // Scale up during charge
+      scale.value = withSequence(
+        withTiming(0.9, { duration: 100 }),
+        withTiming(1.3, { duration: 200, easing: Easing.out(Easing.exp) }),
+        withDelay(150, withTiming(1, { duration: 200 }))
+      );
+      
+      // Slight rotation for aggressive feel
+      rotation.value = withSequence(
+        withTiming(rotationAmount, { duration: 200 }),
+        withDelay(150, withTiming(0, { duration: 250 }))
       );
     }
-  }, [isAttacking]);
+  }, [isChargingAttack, attackingUp]);
+
+  // Being attacked animation - show impact explosion
+  useEffect(() => {
+    if (isBeingAttacked) {
+      // Delay impact to sync with attacker reaching target
+      setTimeout(() => {
+        setShowImpact(true);
+      }, 300);
+    }
+  }, [isBeingAttacked]);
+
+  // Simple attack animation (for selection indication)
+  useEffect(() => {
+    if (isAttacking && !isChargingAttack) {
+      translateY.value = withSequence(
+        withTiming(-10, { duration: 150, easing: Easing.out(Easing.exp) }),
+        withTiming(0, { duration: 150, easing: Easing.out(Easing.ease) })
+      );
+      scale.value = withSequence(
+        withTiming(1.1, { duration: 150 }),
+        withTiming(1, { duration: 150 })
+      );
+    }
+  }, [isAttacking, isChargingAttack]);
 
   const handlePress = () => {
-    if (isValidTarget && onAttackTarget) {
-      onAttackTarget();
-    } else if (isOwned && canAttack && onSelect) {
-      onSelect();
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapRef.current;
+    
+    if (timeSinceLastTap < DOUBLE_TAP_DELAY && onDoubleTap) {
+      // Double tap detected - show card info
+      onDoubleTap();
+      lastTapRef.current = 0; // Reset to prevent triple tap
+      return;
     }
+    
+    lastTapRef.current = now;
+    
+    // Single tap behavior (with slight delay to detect double tap)
+    setTimeout(() => {
+      if (Date.now() - lastTapRef.current >= DOUBLE_TAP_DELAY - 50) {
+        if (isValidTarget && onAttackTarget) {
+          onAttackTarget();
+        } else if (isOwned && canAttack && onSelect) {
+          onSelect();
+        }
+      }
+    }, DOUBLE_TAP_DELAY);
   };
 
   const handleLongPress = () => {
@@ -85,7 +320,13 @@ export default function UnitOnBoard({
       { translateY: translateY.value },
       { translateX: shake.value },
       { scale: scale.value },
+      { rotateZ: `${rotation.value}deg` },
     ],
+    zIndex: isChargingAttack ? 100 : 1, // Bring charging unit to front
+  }));
+
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: flashOpacity.value,
   }));
 
   // Health color based on damage
@@ -96,14 +337,38 @@ export default function UnitOnBoard({
   return (
     <Pressable onPress={handlePress} onLongPress={handleLongPress}>
       <Animated.View style={[styles.container, animatedStyle]}>
-        {/* Can Attack Glow */}
+        {/* Damage Flash Overlay */}
+        <Animated.View style={[styles.damageFlash, flashStyle]} pointerEvents="none" />
+        
+        {/* Floating Damage Number */}
+        {damageAmount !== null && (
+          <DamageNumber 
+            amount={damageAmount} 
+            onComplete={() => setDamageAmount(null)} 
+          />
+        )}
+        
+        {/* Floating Heal Number */}
+        {healAmount !== null && (
+          <HealNumber 
+            amount={healAmount} 
+            onComplete={() => setHealAmount(null)} 
+          />
+        )}
+        
+        {/* Impact Explosion when being attacked */}
+        {showImpact && (
+          <ImpactExplosion onComplete={() => setShowImpact(false)} />
+        )}
+        
+        {/* Can Attack Glow - Pulsing */}
         {isOwned && canAttack && (
-          <View style={[styles.canAttackGlow, { borderColor: '#22c55e' }]} />
+          <Animated.View style={[styles.canAttackGlow, { borderColor: '#22c55e' }]} />
         )}
 
         {/* Valid Target Indicator */}
         {isValidTarget && (
-          <View style={styles.targetIndicator} />
+          <Animated.View style={styles.targetIndicator} />
         )}
 
         {/* Card Border */}
@@ -213,6 +478,48 @@ const styles = StyleSheet.create({
     width: 70,
     height: 95,
     position: 'relative',
+  },
+  damageFlash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 8,
+    backgroundColor: '#ef4444',
+    zIndex: 100,
+  },
+  damageNumber: {
+    position: 'absolute',
+    top: -20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 200,
+  },
+  damageText: {
+    color: '#ef4444',
+    fontSize: 24,
+    fontWeight: '900',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
+  },
+  healNumber: {
+    position: 'absolute',
+    top: -20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 200,
+  },
+  healText: {
+    color: '#22c55e',
+    fontSize: 24,
+    fontWeight: '900',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   },
   canAttackGlow: {
     position: 'absolute',

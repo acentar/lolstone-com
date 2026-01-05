@@ -8,6 +8,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { CardDesignFull } from '../types/database';
 import {
   GameState,
   PlayerGameState,
@@ -34,7 +35,7 @@ import {
   silenceUnit,
   stunUnit,
 } from './combat';
-import { drawCards } from './state';
+import { drawCards, queueOnPlayEffects } from './state';
 
 // ============================================
 // TARGET RESOLUTION
@@ -210,10 +211,20 @@ export function executeEffect(
   state: GameState,
   effect: CardEffect,
   targets: ValidTarget[],
-  sourcePlayerId: string
+  sourcePlayerId: string,
+  sourceUnitId?: string | null
 ): { state: GameState; result: EffectResult } {
   let newState = { ...state };
   const result: EffectResult = { success: true };
+  
+  // Get source unit's design if we have a sourceUnitId (for summon effects, etc.)
+  let sourceUnit: UnitInPlay | null = null;
+  if (sourceUnitId) {
+    const unitData = findUnit(newState, sourceUnitId);
+    if (unitData) {
+      sourceUnit = unitData.unit;
+    }
+  }
   
   for (const target of targets) {
     switch (effect.action) {
@@ -277,8 +288,73 @@ export function executeEffect(
         break;
       
       case 'summon':
-        // Summon requires additional handling (summon_card_id)
-        // Will be implemented with card database integration
+        // Summon tokens using the source unit's design
+        const sourceDesign = sourceUnit?.design;
+        
+        // If we have a source design with token configuration
+        if (sourceDesign && sourceDesign.has_token && sourceDesign.token_name) {
+          console.log('🎭 SUMMON: Creating token:', sourceDesign.token_name);
+          
+          // Check token keywords for 'quick'
+          const tokenKeywords = sourceDesign.token_keywords || [];
+          const hasQuick = tokenKeywords.includes('quick');
+          
+          const tokenDesign: CardDesignFull = {
+            ...sourceDesign,
+            id: uuidv4(), // New ID for the token design
+            name: sourceDesign.token_name,
+            image_url: sourceDesign.token_image_url || sourceDesign.image_url,
+            ability_text: tokenKeywords.length > 0 ? tokenKeywords.join(', ') : null,
+            flavor_text: null,
+            balance_notes: null,
+            inspiration: null,
+            mana_cost: 0, // Tokens are free
+            attack: sourceDesign.token_attack ?? 1,
+            health: sourceDesign.token_health ?? 1,
+            base_attack: sourceDesign.token_attack ?? 1,
+            base_health: sourceDesign.token_health ?? 1,
+            keywords: tokenKeywords,
+            effects: [], // Tokens don't have effects
+            category: 'unit', // Tokens are always units
+            card_type: 'meme_minion', // Default token type
+            has_token: false, // Tokens can't summon other tokens
+            token_name: null,
+            token_image_url: null,
+            token_attack: 0,
+            token_health: 0,
+            token_trigger: null,
+            token_count: 0,
+            token_max_summons: 0,
+            token_keywords: null,
+          };
+
+          // Create token unit with proper quick keyword handling
+          const tokenUnit: UnitInPlay = {
+            id: uuidv4(),
+            cardInstanceId: `token_${Date.now()}_${Math.random()}`, // Virtual instance ID
+            design: tokenDesign,
+            currentAttack: tokenDesign.base_attack ?? 1,
+            currentHealth: tokenDesign.base_health ?? 1,
+            maxHealth: tokenDesign.base_health ?? 1,
+            canAttack: hasQuick, // Use pre-computed hasQuick
+            hasSummoningSickness: !hasQuick,
+            isSilenced: false,
+            isStunned: false,
+            attackBuff: 0,
+            healthBuff: 0,
+            position: sourcePlayer.board.length,
+          };
+
+          console.log('🎭 Token created:', tokenUnit.design.name, 'ATK:', tokenUnit.currentAttack, 'HP:', tokenUnit.currentHealth);
+
+          // Add token to source player's board
+          sourcePlayer.board.push(tokenUnit);
+
+          // Queue on_play effects for the token (if any)
+          queueOnPlayEffects(newState, tokenUnit, sourcePlayerId);
+        } else {
+          console.warn('⚠️ SUMMON: No valid token configuration found');
+        }
         break;
       
       case 'copy':
@@ -368,12 +444,13 @@ export function processEffectQueue(state: GameState): GameState {
       );
     }
     
-    // Execute the effect
+    // Execute the effect (pass sourceUnitId for summon effects)
     const { state: resultState } = executeEffect(
       newState,
       pendingEffect.effect,
       targets,
-      pendingEffect.sourcePlayerId
+      pendingEffect.sourcePlayerId,
+      pendingEffect.sourceUnitId
     );
     
     newState = resultState;

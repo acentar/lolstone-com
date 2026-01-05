@@ -139,6 +139,7 @@ class MatchmakingService {
     try {
       const updates: any = {
         game_state: gameState,
+        updated_at: new Date().toISOString(), // Force update to trigger realtime
       };
 
       if (status) {
@@ -155,19 +156,27 @@ class MatchmakingService {
         updates.ended_at = new Date().toISOString();
       }
 
+      console.log('📤 Updating game room in database:', {
+        gameRoomId,
+        currentTurn: updates.current_turn,
+        activePlayer: updates.active_player_id,
+        status: updates.status,
+      });
+
       const { error } = await supabase
         .from('game_rooms')
         .update(updates)
         .eq('id', gameRoomId);
 
       if (error) {
-        console.error('Error updating game state:', error);
+        console.error('❌ Error updating game state:', error);
         return false;
       }
 
+      console.log('✅ Game state saved to database');
       return true;
     } catch (error) {
-      console.error('Error in updateGameState:', error);
+      console.error('❌ Error in updateGameState:', error);
       return false;
     }
   }
@@ -255,32 +264,72 @@ class MatchmakingService {
   }
 
   /**
-   * Subscribe to game room changes
+   * Subscribe to game room changes with auto-reconnection
    */
   subscribeToGame(gameRoomId: string, onStateChange: (gameRoom: GameRoom) => void): () => void {
     this.onGameStateChangeCallback = onStateChange;
     
-    this.gameChannel = supabase
-      .channel(`game:${gameRoomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'game_rooms',
-          filter: `id=eq.${gameRoomId}`,
-        },
-        (payload) => {
-          console.log('Game state updated:', payload);
-          if (this.onGameStateChangeCallback) {
-            this.onGameStateChangeCallback(payload.new as GameRoom);
+    // Clean up any existing subscription
+    if (this.gameChannel) {
+      supabase.removeChannel(this.gameChannel);
+      this.gameChannel = null;
+    }
+    
+    console.log('🔌 Setting up realtime subscription for game:', gameRoomId);
+    
+    const setupChannel = () => {
+      this.gameChannel = supabase
+        .channel(`game:${gameRoomId}`, {
+          config: {
+            presence: { key: gameRoomId },
+          },
+        })
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to ALL changes (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'game_rooms',
+            filter: `id=eq.${gameRoomId}`,
+          },
+          (payload) => {
+            console.log('🔔 Realtime event:', payload.eventType, 'Turn:', payload.new?.current_turn);
+            if (this.onGameStateChangeCallback && payload.new) {
+              this.onGameStateChangeCallback(payload.new as GameRoom);
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe((status, err) => {
+          console.log('🔌 Realtime subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Successfully subscribed to game room updates');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ Channel error:', err);
+            // Try to reconnect after 2 seconds
+            setTimeout(() => {
+              console.log('🔄 Attempting to reconnect...');
+              if (this.gameChannel) {
+                supabase.removeChannel(this.gameChannel);
+              }
+              setupChannel();
+            }, 2000);
+          } else if (status === 'TIMED_OUT') {
+            console.warn('⏱️ Subscription timed out, reconnecting...');
+            setTimeout(() => {
+              if (this.gameChannel) {
+                supabase.removeChannel(this.gameChannel);
+              }
+              setupChannel();
+            }, 1000);
+          }
+        });
+    };
+
+    setupChannel();
 
     // Return unsubscribe function
     return () => {
+      console.log('🔌 Unsubscribing from game room:', gameRoomId);
       if (this.gameChannel) {
         supabase.removeChannel(this.gameChannel);
         this.gameChannel = null;

@@ -30,6 +30,7 @@ interface CardInHandProps {
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onLongPress?: () => void;
+  onDoubleTap?: () => void; // Double-tap to show card details
 }
 
 const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = {
@@ -51,6 +52,7 @@ export default function CardInHand({
   onDragStart,
   onDragEnd,
   onLongPress,
+  onDoubleTap,
 }: CardInHandProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -86,9 +88,18 @@ export default function CardInHand({
       if (onDragEnd) runOnJS(onDragEnd)();
     });
 
+  // Single tap to select
   const tapGesture = Gesture.Tap()
     .onEnd(() => {
       if (onSelect) runOnJS(onSelect)();
+    });
+
+  // Double tap to show card details
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (onDoubleTap) runOnJS(onDoubleTap)();
+      else if (onLongPress) runOnJS(onLongPress)(); // Fallback to longPress handler
     });
 
   const longPressGesture = Gesture.LongPress()
@@ -97,9 +108,11 @@ export default function CardInHand({
       if (onLongPress) runOnJS(onLongPress)();
     });
 
+  // Double tap takes priority, then single tap, then long press
   const composedGesture = Gesture.Race(
     panGesture,
-    Gesture.Simultaneous(tapGesture, longPressGesture)
+    Gesture.Exclusive(doubleTapGesture, tapGesture),
+    longPressGesture
   );
 
   const animatedStyle = useAnimatedStyle(() => ({

@@ -7,6 +7,7 @@ import { useAuthContext } from '../../src/context/AuthContext';
 import { supabase } from '../../src/lib/supabase';
 import { colors, spacing } from '../../src/constants/theme';
 import { Deck } from '../../src/types/database';
+import { MatchmakingScreen } from '../../src/components/game';
 
 export default function PlayerHomeScreen() {
   const { player, refreshPlayer } = useAuthContext();
@@ -22,7 +23,7 @@ export default function PlayerHomeScreen() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [disconnectedGames, setDisconnectedGames] = useState<any[]>([]);
   const [deckMenuVisible, setDeckMenuVisible] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showMatchmaking, setShowMatchmaking] = useState(false);
 
   // Background task to check for disconnected players and auto-declare winners
   useEffect(() => {
@@ -114,12 +115,14 @@ export default function PlayerHomeScreen() {
       setDecks(validDecks);
 
       // Check for saved deck preference in localStorage
-      const savedDeckId = localStorage.getItem(`lolstone_selected_deck_${player.id}`);
-      if (savedDeckId) {
-        const savedDeck = validDecks.find(d => d.id === savedDeckId);
-        if (savedDeck) {
-          setSelectedDeck(savedDeck);
-          return;
+      if (typeof localStorage !== 'undefined') {
+        const savedDeckId = localStorage.getItem(`lolstone_selected_deck_${player.id}`);
+        if (savedDeckId) {
+          const savedDeck = validDecks.find(d => d.id === savedDeckId);
+          if (savedDeck) {
+            setSelectedDeck(savedDeck);
+            return;
+          }
         }
       }
 
@@ -128,7 +131,9 @@ export default function PlayerHomeScreen() {
       if (activeDeck) {
         setSelectedDeck(activeDeck);
         // Save this choice
-        localStorage.setItem(`lolstone_selected_deck_${player.id}`, activeDeck.id);
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(`lolstone_selected_deck_${player.id}`, activeDeck.id);
+        }
       }
     } catch (error) {
       console.error('Error loading decks:', error);
@@ -139,13 +144,16 @@ export default function PlayerHomeScreen() {
     setSelectedDeck(deck);
     setDeckMenuVisible(false);
     // Save selection to localStorage
-    localStorage.setItem(`lolstone_selected_deck_${player?.id}`, deck.id);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`lolstone_selected_deck_${player?.id}`, deck.id);
+    }
   };
 
   const loadActiveGames = async () => {
     if (!player?.id) return;
 
     try {
+      // Get active games with player names via joins
       const { data, error } = await supabase
         .from('game_rooms')
         .select(`
@@ -153,10 +161,9 @@ export default function PlayerHomeScreen() {
           status,
           player1_id,
           player2_id,
-          player1_name,
-          player2_name,
           created_at,
-          players!game_rooms_player1_id_fkey (name, avatar_url)
+          player1:players!game_rooms_player1_id_fkey (name, avatar_url),
+          player2:players!game_rooms_player2_id_fkey (name, avatar_url)
         `)
         .or(`player1_id.eq.${player.id},player2_id.eq.${player.id}`)
         .eq('status', 'playing')
@@ -173,113 +180,36 @@ export default function PlayerHomeScreen() {
     if (!selectedDeck) {
       Alert.alert(
         'Select a Deck',
-        'You must select a deck before playing. Go to your Decks tab to choose one.',
+        'You must select a deck before playing. Tap the deck selector above to choose one.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Go to Decks', onPress: () => router.push('/player/decks') }
+          { text: 'Select Deck', onPress: () => setDeckMenuVisible(true) }
         ]
       );
       return;
     }
 
-    router.push('/player/play');
+    setShowMatchmaking(true);
   };
 
-  // Debug function to check auth status
-  const debugAuthStatus = async () => {
-    try {
-      console.log('=== DEBUG AUTH STATUS ===');
-      console.log('Current user:', user);
-      console.log('User ID:', user?.id);
-      console.log('Is GM from context:', isGameMaster);
-
-      if (user?.id) {
-        // Test the is_game_master RPC function
-        const { data: isGM, error: rpcError } = await supabase.rpc('is_game_master', {
-          user_uuid: user.id
-        });
-        console.log('is_game_master RPC result:', { isGM, rpcError });
-
-        // Check if GM record exists
-        const { data: gmRecord, error: gmError } = await supabase
-          .from('game_masters')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
-        console.log('GM record from database:', { gmRecord, gmError });
-
-        // Also check by email to see all GM accounts
-        const { data: allGMs, error: allGMError } = await supabase
-          .from('game_masters')
-          .select('*');
-
-        console.log('All GM records:', { allGMs, allGMError });
-
-        setDebugInfo({
-          userId: user.id,
-          email: user.email,
-          isGM_RPC: isGM,
-          gmRecord,
-          gmError,
-          rpcError
-        });
-
-        Alert.alert(
-          'Debug Info',
-          `User: ${user.email}\nGM RPC: ${isGM}\nGM Record: ${gmRecord ? 'EXISTS' : 'NOT FOUND'}\nError: ${gmError?.message || 'None'}`
-        );
-      }
-    } catch (error) {
-      console.error('Debug error:', error);
-      Alert.alert('Debug Error', error.message);
-    }
+  const handleGameStart = (gameRoomId: string) => {
+    setShowMatchmaking(false);
+    router.push(`/player/game/${gameRoomId}`);
   };
 
-  // Create GM account for current user
-  const createGMForCurrentUser = async () => {
-    if (!user?.id || !user?.email) {
-      Alert.alert('Error', 'No user logged in');
-      return;
-    }
-
-    try {
-      console.log('Creating GM account for:', user.email);
-
-      // Check if GM record already exists
-      const { data: existingGM } = await supabase
-        .from('game_masters')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (existingGM) {
-        Alert.alert('Info', 'GM account already exists!');
-        return;
-      }
-
-      // Create GM record
-      const { data, error } = await supabase
-        .from('game_masters')
-        .insert({
-          user_id: user.id,
-          name: 'Game Master',
-          email: user.email
-        });
-
-      if (error) {
-        console.error('Error creating GM:', error);
-        Alert.alert('Error', `Failed to create GM account: ${error.message}`);
-        return;
-      }
-
-      console.log('GM account created:', data);
-      Alert.alert('Success', 'GM account created! Refresh the page to access GMP.');
-    } catch (error) {
-      console.error('Exception creating GM:', error);
-      Alert.alert('Error', `Exception: ${error.message}`);
-    }
-  };
+  // Show matchmaking screen when searching
+  if (showMatchmaking && player && selectedDeck) {
+    return (
+      <MatchmakingScreen
+        playerId={player.id}
+        playerName={player.name}
+        decks={decks}
+        selectedDeckId={selectedDeck.id}
+        onGameStart={handleGameStart}
+        onCancel={() => setShowMatchmaking(false)}
+      />
+    );
+  }
 
   return (
     <LinearGradient
@@ -299,139 +229,131 @@ export default function PlayerHomeScreen() {
           </View>
         </View>
 
-        {/* Debug Buttons */}
-        <View style={{ flexDirection: 'row', marginBottom: 10, gap: 10, paddingHorizontal: spacing.lg }}>
+        {/* Quick Play Section */}
+        <View style={styles.quickPlaySection}>
+          {/* Deck Selector */}
           <Pressable
-            style={{ padding: 10, backgroundColor: '#ff6b6b', flex: 1, borderRadius: 8 }}
-            onPress={testAddDucats}
+            style={[
+              styles.deckSelectorButton,
+              {
+                backgroundColor: selectedDeck ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                borderColor: selectedDeck ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)',
+              }
+            ]}
+            onPress={() => setDeckMenuVisible(true)}
           >
-            <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>🧪 Test Ducats</Text>
-          </Pressable>
-          <Pressable
-            style={{ padding: 10, backgroundColor: '#8b5cf6', flex: 1, borderRadius: 8 }}
-            onPress={debugAuthStatus}
-          >
-            <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>🔍 Debug Auth</Text>
-          </Pressable>
-          <Pressable
-            style={{ padding: 10, backgroundColor: '#22c55e', flex: 1, borderRadius: 8 }}
-            onPress={createGMForCurrentUser}
-          >
-            <Text style={{ color: 'white', textAlign: 'center', fontSize: 12 }}>⚡ Make GM</Text>
-          </Pressable>
-        </View>
-
-        {/* Quick Play Button */}
-        <Pressable
-          style={styles.playButton}
-          onPress={handlePlayPress}
-        >
-          <LinearGradient
-            colors={['#22c55e', '#16a34a']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.playGradient}
-          >
-            <Text style={styles.playEmoji}>⚔️</Text>
-            <View>
-              <Text style={styles.playText}>FIND A MATCH</Text>
-              <Text style={styles.playSubtext}>Battle other players</Text>
+            <Text style={styles.deckSelectorEmoji}>
+              {selectedDeck ? '⚔️' : '📚'}
+            </Text>
+            <View style={styles.deckSelectorInfo}>
+              <Text style={styles.deckSelectorLabel}>
+                {selectedDeck ? selectedDeck.name : 'Choose a deck'}
+              </Text>
+              <Text style={[
+                styles.deckSelectorStatus,
+                { color: selectedDeck ? '#22c55e' : '#f59e0b' }
+              ]}>
+                {selectedDeck ? 'Ready for battle' : 'Select to play'}
+              </Text>
             </View>
-          </LinearGradient>
-        </Pressable>
+            <Text style={[
+              styles.deckSelectorArrow,
+              { color: selectedDeck ? '#22c55e' : '#f59e0b' }
+            ]}>
+              {deckMenuVisible ? '▲' : '▼'}
+            </Text>
+          </Pressable>
 
-        {/* Deck Selection & Active Games */}
-        <View style={styles.deckAndGamesSection}>
-          <View style={styles.deckSection}>
-            <Text style={styles.sectionTitle}>Battle Deck</Text>
-            <View style={styles.deckSelectorContainer}>
-              <Pressable
-                style={[
-                  styles.deckSelectorButton,
-                  {
-                    backgroundColor: selectedDeck ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                    borderColor: selectedDeck ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)',
-                  }
-                ]}
-                onPress={() => setDeckMenuVisible(true)}
-              >
-                <Text style={styles.deckSelectorEmoji}>
-                  {selectedDeck ? '⚔️' : '📚'}
+          {/* Play Button */}
+          <Pressable
+            style={[
+              styles.playButton,
+              !selectedDeck && styles.playButtonDisabled
+            ]}
+            onPress={handlePlayPress}
+          >
+            <LinearGradient
+              colors={selectedDeck ? ['#22c55e', '#16a34a'] : ['#475569', '#334155']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.playGradient}
+            >
+              <Text style={styles.playEmoji}>⚔️</Text>
+              <View>
+                <Text style={styles.playText}>QUICK MATCH</Text>
+                <Text style={styles.playSubtext}>
+                  {selectedDeck ? 'Find an opponent' : 'Select a deck first'}
                 </Text>
-                <View style={styles.deckSelectorInfo}>
-                  <Text style={styles.deckSelectorLabel}>
-                    {selectedDeck ? selectedDeck.name : 'Choose a deck'}
-                  </Text>
-                  <Text style={[
-                    styles.deckSelectorStatus,
-                    { color: selectedDeck ? '#22c55e' : '#f59e0b' }
-                  ]}>
-                    {selectedDeck ? 'Ready for battle' : 'Select to play'}
-                  </Text>
-                </View>
-                <Text style={[
-                  styles.deckSelectorArrow,
-                  { color: selectedDeck ? '#22c55e' : '#f59e0b' }
-                ]}>
-                  {deckMenuVisible ? '▲' : '▼'}
-                </Text>
-              </Pressable>
+              </View>
+            </LinearGradient>
+          </Pressable>
+
+          {/* Game Modes Coming Soon */}
+          <View style={styles.gameModes}>
+            <View style={styles.gameModeCard}>
+              <Text style={styles.gameModeEmoji}>🏆</Text>
+              <Text style={styles.gameModeName}>Ranked</Text>
+              <Text style={styles.gameModeStatus}>Coming Soon</Text>
+            </View>
+            <View style={styles.gameModeCard}>
+              <Text style={styles.gameModeEmoji}>🤖</Text>
+              <Text style={styles.gameModeName}>Practice</Text>
+              <Text style={styles.gameModeStatus}>Coming Soon</Text>
             </View>
           </View>
-
-          {/* Active Games */}
-          {activeGames.length > 0 && (
-            <View style={styles.activeGamesSection}>
-              <Text style={styles.sectionTitle}>Active Games</Text>
-              {activeGames.slice(0, 2).map((game) => {
-                // Check if this game has a disconnected player
-                const disconnectedInfo = disconnectedGames.find(dg => dg.game_id === game.id);
-                const isOpponentDisconnected = disconnectedInfo && disconnectedInfo.disconnected_player_id !== player?.id;
-                const isPlayerDisconnected = disconnectedInfo && disconnectedInfo.disconnected_player_id === player?.id;
-                const timeLeft = disconnectedInfo ? Math.max(0, 3 - disconnectedInfo.minutes_elapsed) : null;
-
-                return (
-                  <Pressable
-                    key={game.id}
-                    style={[
-                      styles.activeGameCard,
-                      isOpponentDisconnected && styles.activeGameCardWarning,
-                      isPlayerDisconnected && styles.activeGameCardDanger
-                    ]}
-                    onPress={() => router.push(`/player/game/${game.id}`)}
-                  >
-                    <View style={styles.activeGameHeader}>
-                      <Text style={styles.activeGameOpponent}>
-                        vs {game.player1_id === player?.id ? game.player2_name : game.player1_name}
-                      </Text>
-                      <View style={[
-                        styles.activeGameStatus,
-                        isOpponentDisconnected && styles.activeGameStatusWarning,
-                        isPlayerDisconnected && styles.activeGameStatusDanger
-                      ]}>
-                        <Text style={[
-                          styles.activeGameStatusText,
-                          (isOpponentDisconnected || isPlayerDisconnected) && styles.activeGameStatusTextWarning
-                        ]}>
-                          {isPlayerDisconnected ? 'YOU DC' :
-                           isOpponentDisconnected ? 'OPP DC' : 'LIVE'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.activeGameAction}>
-                      {isPlayerDisconnected ?
-                        `⚠️ Return in ${timeLeft?.toFixed(1)}m or lose!` :
-                        isOpponentDisconnected ?
-                        `🎯 Win in ${timeLeft?.toFixed(1)}m if they don't return!` :
-                        'Tap to rejoin →'
-                      }
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
         </View>
+
+        {/* Active Games */}
+        {activeGames.length > 0 && (
+          <View style={styles.activeGamesSection}>
+            <Text style={styles.sectionTitle}>Active Games</Text>
+            {activeGames.slice(0, 3).map((game) => {
+              const disconnectedInfo = disconnectedGames.find(dg => dg.game_id === game.id);
+              const isOpponentDisconnected = disconnectedInfo && disconnectedInfo.disconnected_player_id !== player?.id;
+              const isPlayerDisconnected = disconnectedInfo && disconnectedInfo.disconnected_player_id === player?.id;
+              const timeLeft = disconnectedInfo ? Math.max(0, 3 - disconnectedInfo.minutes_elapsed) : null;
+
+              return (
+                <Pressable
+                  key={game.id}
+                  style={[
+                    styles.activeGameCard,
+                    isOpponentDisconnected && styles.activeGameCardWarning,
+                    isPlayerDisconnected && styles.activeGameCardDanger
+                  ]}
+                  onPress={() => router.push(`/player/game/${game.id}`)}
+                >
+                  <View style={styles.activeGameHeader}>
+                    <Text style={styles.activeGameOpponent}>
+                      vs {game.player1_id === player?.id ? game.player2?.name : game.player1?.name}
+                    </Text>
+                    <View style={[
+                      styles.activeGameStatus,
+                      isOpponentDisconnected && styles.activeGameStatusWarning,
+                      isPlayerDisconnected && styles.activeGameStatusDanger
+                    ]}>
+                      <Text style={[
+                        styles.activeGameStatusText,
+                        (isOpponentDisconnected || isPlayerDisconnected) && styles.activeGameStatusTextWarning
+                      ]}>
+                        {isPlayerDisconnected ? 'YOU DC' :
+                         isOpponentDisconnected ? 'OPP DC' : 'LIVE'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.activeGameAction}>
+                    {isPlayerDisconnected ?
+                      `⚠️ Return in ${timeLeft?.toFixed(1)}m or lose!` :
+                      isOpponentDisconnected ?
+                      `🎯 Win in ${timeLeft?.toFixed(1)}m if they don't return!` :
+                      'Tap to rejoin →'
+                    }
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
@@ -595,47 +517,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  playButton: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#22c55e',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  playGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    gap: 16,
-  },
-  playEmoji: {
-    fontSize: 32,
-  },
-  playText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  playSubtext: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 12,
-  },
-  deckAndGamesSection: {
+  quickPlaySection: {
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
-    gap: spacing.md,
-  },
-  deckSection: {
-    marginBottom: spacing.md,
-  },
-  deckSelectorContainer: {
-    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
   },
   deckSelectorButton: {
     borderWidth: 1,
@@ -643,6 +527,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
   deckSelectorEmoji: {
     fontSize: 24,
@@ -664,8 +549,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  playButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    marginBottom: spacing.md,
+  },
+  playButtonDisabled: {
+    shadowOpacity: 0,
+  },
+  playGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  playEmoji: {
+    fontSize: 32,
+  },
+  playText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  playSubtext: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+  },
+  gameModes: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  gameModeCard: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    borderRadius: 12,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 0.5)',
+    opacity: 0.6,
+  },
+  gameModeEmoji: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  gameModeName: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  gameModeStatus: {
+    color: '#3b82f6',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   activeGamesSection: {
-    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   activeGameCard: {
     backgroundColor: 'rgba(34, 197, 94, 0.1)',
@@ -716,8 +664,17 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   activeGameAction: {
-    color: '#fca5a5',
+    color: '#94a3b8',
     fontSize: 13,
+  },
+  sectionTitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -745,15 +702,6 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     marginTop: 4,
-  },
-  sectionTitle: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
   },
   actionsRow: {
     flexDirection: 'row',

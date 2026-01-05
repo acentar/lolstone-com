@@ -17,8 +17,110 @@ import BoosterPackReveal from '../../src/components/BoosterPackReveal';
 import CryptoPayment from '../../src/components/CryptoPayment';
 import { spacing } from '../../src/constants/theme';
 
-const BOOSTER_COST = 100;
-const CARDS_PER_PACK = 6;
+// Booster Pack Types
+interface BoosterPackType {
+  id: string;
+  name: string;
+  cards: number;
+  cost: number;
+  color1: string;
+  color2: string;
+  color3: string;
+  icon: string;
+  description: string;
+  guarantees: {
+    uncommon?: number;
+    rare?: number;
+    epic?: number;
+    legendary?: number;
+  };
+}
+
+const BOOSTER_PACKS: BoosterPackType[] = [
+  {
+    id: 'starter',
+    name: 'Starter Pack',
+    cards: 3,
+    cost: 30,
+    color1: '#374151',
+    color2: '#4b5563',
+    color3: '#6b7280',
+    icon: '📦',
+    description: '3 random cards to get started',
+    guarantees: {},
+  },
+  {
+    id: 'basic',
+    name: 'Basic Pack',
+    cards: 6,
+    cost: 100,
+    color1: '#1e40af',
+    color2: '#3b82f6',
+    color3: '#60a5fa',
+    icon: '🎁',
+    description: '6 cards with decent variety',
+    guarantees: { uncommon: 1 },
+  },
+  {
+    id: 'standard',
+    name: 'Standard Pack',
+    cards: 10,
+    cost: 150,
+    color1: '#166534',
+    color2: '#22c55e',
+    color3: '#4ade80',
+    icon: '🎊',
+    description: '10 cards, guaranteed rare!',
+    guarantees: { uncommon: 2, rare: 1 },
+  },
+  {
+    id: 'premium',
+    name: 'Premium Pack',
+    cards: 15,
+    cost: 200,
+    color1: '#7c3aed',
+    color2: '#a855f7',
+    color3: '#c084fc',
+    icon: '💎',
+    description: '15 cards with epic guarantee',
+    guarantees: { uncommon: 3, rare: 2, epic: 1 },
+  },
+  {
+    id: 'mega',
+    name: 'Mega Pack',
+    cards: 20,
+    cost: 280,
+    color1: '#b45309',
+    color2: '#f59e0b',
+    color3: '#fbbf24',
+    icon: '🏆',
+    description: '20 cards, multiple epics!',
+    guarantees: { uncommon: 4, rare: 3, epic: 2 },
+  },
+  {
+    id: 'ultimate',
+    name: 'Ultimate Pack',
+    cards: 30,
+    cost: 400,
+    color1: '#dc2626',
+    color2: '#ef4444',
+    color3: '#f87171',
+    icon: '👑',
+    description: '30 cards with LEGENDARY!',
+    guarantees: { uncommon: 5, rare: 4, epic: 2, legendary: 1 },
+  },
+];
+
+// Rarity weights (higher = more likely)
+const RARITY_WEIGHTS: Record<string, number> = {
+  common: 50,
+  uncommon: 30,
+  rare: 15,
+  epic: 4,
+  legendary: 1,
+};
+
+const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 interface AvailableCard {
   id: string;
@@ -40,49 +142,6 @@ export default function ShopScreen() {
   const [revealedCards, setRevealedCards] = useState<RevealedCard[]>([]);
   const [showCryptoPayment, setShowCryptoPayment] = useState(false);
 
-  // Test ducat crediting
-  const testAddDucats = async () => {
-    if (!user?.id) {
-      Alert.alert('Error', 'Not logged in');
-      return;
-    }
-
-    try {
-      console.log('🧪 Testing ducat crediting...');
-
-      // Get current balance
-      const { data: playerData, error: selectError } = await supabase
-        .from('players')
-        .select('id, ducats')
-        .eq('user_id', user.id)
-        .single();
-
-      if (selectError) {
-        Alert.alert('Test Failed', `Player lookup: ${selectError.message}`);
-        return;
-      }
-
-      const current = playerData?.ducats || 0;
-      const newBalance = current + 10;
-
-      // Update balance
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({ ducats: newBalance })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        Alert.alert('Test Failed', `Update failed: ${updateError.message}`);
-        return;
-      }
-
-      await refreshPlayer();
-      Alert.alert('✅ Test Success', `Added 10 ducats!\nBalance: ${newBalance}`);
-
-    } catch (error) {
-      Alert.alert('Test Error', error.message);
-    }
-  };
   
   // Animation for the pack
   const packFloat = useState(new Animated.Value(0))[0];
@@ -124,227 +183,292 @@ export default function ShopScreen() {
     }
   };
 
-  const purchaseBooster = async () => {
+  const purchaseBooster = async (packType: BoosterPackType) => {
     console.log('=== BOOSTER PURCHASE STARTED ===');
+    console.log('Pack:', packType.name, 'Cards:', packType.cards, 'Cost:', packType.cost);
     console.log('Player:', player?.id, 'Ducats:', player?.ducats);
     
     if (!player) {
-      console.log('ERROR: No player!');
       Alert.alert('Error', 'Not logged in as a player');
       return;
     }
 
-    // Check if player has enough ducats
-    if ((player.ducats || 0) < BOOSTER_COST) {
-      console.log('ERROR: Not enough ducats');
+    if ((player.ducats || 0) < packType.cost) {
       Alert.alert(
         'Not Enough Ducats',
-        `You need ${BOOSTER_COST} ducats to buy a booster pack. You have ${player.ducats || 0}.`,
-        [{ text: 'OK' }]
+        `You need ${packType.cost} ducats. You have ${player.ducats || 0}.`
       );
       return;
     }
 
-    // Check if there are enough cards available
-    if (availableCount < CARDS_PER_PACK) {
-      Alert.alert(
-        'Not Enough Cards',
-        `There aren't enough cards available in the pool. Only ${availableCount} cards left.`,
-        [{ text: 'OK' }]
-      );
+    if (availableCount < packType.cards) {
+      Alert.alert('Not Enough Cards', `Only ${availableCount} cards available in pool.`);
       return;
     }
 
     setLoading(true);
 
     try {
-      // Get available cards - fetch enough to ensure variety across all designs
-      // Order randomly to avoid always getting the same designs
-      const { data: availableCards, error: fetchError } = await supabase
-        .from('card_instances')
-        .select(`
-          id,
-          design_id,
-          card_designs (*)
-        `)
-        .is('owner_id', null)
-        .limit(500); // Get more cards to ensure variety across all designs
+      console.log('🎲 Fetching available cards from pool...');
+      
+      // NEW APPROACH: Start from card_designs to avoid 1000 row limit on card_instances
+      
+      // STEP 1: Get all card designs that have been minted
+      const { data: allDesigns, error: designsError } = await supabase
+        .from('card_designs')
+        .select('id, name, rarity')
+        .gt('total_minted', 0)
+        .eq('is_active', true);
 
-      if (fetchError) {
-        console.log('ERROR fetching cards:', fetchError);
-        throw fetchError;
+      if (designsError) {
+        console.error('🎲 Error fetching card designs:', designsError);
+        throw designsError;
       }
 
-      console.log('Available cards fetched:', availableCards?.length);
+      console.log('🎲 Designs with mints:', allDesigns?.length || 0);
 
-      if (!availableCards || availableCards.length < CARDS_PER_PACK) {
-        console.log('ERROR: Not enough cards in pool');
-        Alert.alert('Error', 'Not enough cards available');
+      if (!allDesigns || allDesigns.length === 0) {
+        Alert.alert('Error', 'No cards available in pool');
         setLoading(false);
         return;
       }
 
-      // === SMART BOOSTER PACK SELECTION ===
-      // 1. Group cards by design
-      // 2. Weight designs by rarity (common = more likely, legendary = rare)
-      // 3. Pick designs randomly based on weight
-      // 4. For each design, pick 1-2 copies (max 2 per design)
-      // 5. Always get exactly 6 cards
+      // STEP 2: For each design, check if there are unowned instances and get some
+      const availableCards: AvailableCard[] = [];
+      const designsWithCards: string[] = [];
       
-      const MAX_SAME_DESIGN = 2;
+      for (const design of allDesigns) {
+        // First check count
+        const { count, error: countError } = await supabase
+          .from('card_instances')
+          .select('*', { count: 'exact', head: true })
+          .eq('design_id', design.id)
+          .is('owner_id', null);
+
+        if (countError || !count || count === 0) {
+          continue; // Skip designs with no unowned instances
+        }
+
+        // Get up to 20 instances per design (enough for variety in packs)
+        const { data: instancesForDesign, error: instancesError } = await supabase
+          .from('card_instances')
+          .select('id, design_id, card_designs (*)')
+          .eq('design_id', design.id)
+          .is('owner_id', null)
+          .limit(20);
+
+        if (instancesError || !instancesForDesign) {
+          console.warn('🎲 Error fetching instances for', design.name);
+          continue;
+        }
+
+        availableCards.push(...(instancesForDesign as AvailableCard[]));
+        designsWithCards.push(design.name);
+      }
+
+      console.log('🎲 Total available cards fetched:', availableCards.length, 'from', designsWithCards.length, 'designs');
+      console.log('🎲 Designs with unowned cards:', designsWithCards);
       
-      // Rarity weights (higher = more likely to appear)
-      const RARITY_WEIGHTS: Record<string, number> = {
-        common: 50,
-        uncommon: 30,
-        rare: 15,
-        epic: 4,
-        legendary: 1,
-      };
+      if (!availableCards || availableCards.length === 0) {
+        Alert.alert('Error', 'No cards available in pool');
+        setLoading(false);
+        return;
+      }
       
-      // Group cards by design
+      if (availableCards.length < packType.cards) {
+        console.log('Warning: Only', availableCards.length, 'cards available, need', packType.cards);
+        // Continue anyway with what we have
+      }
+
+      // Group cards by design and rarity
       const cardsByDesign: Record<string, { cards: AvailableCard[]; rarity: string }> = {};
+      const cardsByRarity: Record<string, AvailableCard[]> = {
+        common: [], uncommon: [], rare: [], epic: [], legendary: []
+      };
       
       for (const card of availableCards as AvailableCard[]) {
         const design = card.card_designs as unknown as CardDesign;
+        const rarity = design.rarity || 'common';
+        
         if (!cardsByDesign[card.design_id]) {
-          cardsByDesign[card.design_id] = {
-            cards: [],
-            rarity: design.rarity || 'common',
-          };
+          cardsByDesign[card.design_id] = { cards: [], rarity };
         }
         cardsByDesign[card.design_id].cards.push(card);
+        
+        if (cardsByRarity[rarity]) {
+          cardsByRarity[rarity].push(card);
+        }
       }
+
+      // Count unique designs
+      const uniqueDesigns = Object.keys(cardsByDesign).length;
+      console.log('Unique designs available:', uniqueDesigns);
+      console.log('Cards per design:', Object.entries(cardsByDesign).map(([id, d]) => 
+        `${id.slice(0,8)}: ${d.cards.length} (${d.rarity})`
+      ));
+
+      // IMPORTANT: Limit max copies per design to ensure variety
+      // Maximum 4 copies of any single design (like real card games)
+      const ABSOLUTE_MAX_COPIES = 4;
       
-      const designIds = Object.keys(cardsByDesign);
-      console.log('Unique designs found:', designIds.length);
+      // Calculate minimum needed to fill pack (fallback only if not enough variety)
+      const minCopiesNeeded = Math.ceil(packType.cards / uniqueDesigns);
+      const MAX_SAME_DESIGN = uniqueDesigns >= packType.cards / 4 
+        ? ABSOLUTE_MAX_COPIES  // Enough variety, enforce hard limit
+        : Math.min(minCopiesNeeded + 1, ABSOLUTE_MAX_COPIES * 2); // Limited variety, allow more but cap at 8
       
-      if (designIds.length === 0) {
-        Alert.alert('Error', 'No card designs available!');
+      console.log('🎲 Pack config: Need', packType.cards, 'cards from', uniqueDesigns, 'designs');
+      console.log('🎲 MAX_SAME_DESIGN:', MAX_SAME_DESIGN, '(absolute max:', ABSOLUTE_MAX_COPIES, ')');
+      const selectedCards: AvailableCard[] = [];
+      const designCounts: Record<string, number> = {};
+      const usedCardIds = new Set<string>();
+
+      // Helper: Pick a card from specific rarity
+      const pickFromRarity = (rarity: string): AvailableCard | null => {
+        const available = cardsByRarity[rarity]?.filter(c => 
+          !usedCardIds.has(c.id) && (designCounts[c.design_id] || 0) < MAX_SAME_DESIGN
+        );
+        if (!available || available.length === 0) return null;
+        
+        // Shuffle and pick
+        const shuffled = [...available].sort(() => Math.random() - 0.5);
+        return shuffled[0];
+      };
+
+      // Helper: Pick weighted random card (with variety bonus)
+      const pickWeighted = (): AvailableCard | null => {
+        const allAvailable = Object.values(cardsByDesign).flatMap(d => 
+          d.cards.filter(c => 
+            !usedCardIds.has(c.id) && (designCounts[c.design_id] || 0) < MAX_SAME_DESIGN
+          )
+        );
+        
+        if (allAvailable.length === 0) return null;
+
+        // Build weighted pool with variety bonus
+        // Cards from designs we haven't picked yet get a significant boost
+        const weighted: { card: AvailableCard; weight: number }[] = allAvailable.map(card => {
+          const design = card.card_designs as unknown as CardDesign;
+          const rarityWeight = RARITY_WEIGHTS[design.rarity] || 10;
+          
+          // Variety bonus: designs with 0 picks get 5x bonus, 1 pick gets 2x, 2+ picks normal
+          const currentCount = designCounts[card.design_id] || 0;
+          const varietyMultiplier = currentCount === 0 ? 5 : (currentCount === 1 ? 2 : 1);
+          
+          return { card, weight: rarityWeight * varietyMultiplier };
+        });
+
+        const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
+        let random = Math.random() * totalWeight;
+        
+        for (const w of weighted) {
+          random -= w.weight;
+          if (random <= 0) return w.card;
+        }
+        return weighted[weighted.length - 1].card;
+      };
+
+      // Helper: Add card to selection
+      const addCard = (card: AvailableCard) => {
+        selectedCards.push(card);
+        usedCardIds.add(card.id);
+        designCounts[card.design_id] = (designCounts[card.design_id] || 0) + 1;
+      };
+
+      // STEP 1: Fulfill guaranteed rarities (pick from highest first)
+      const guaranteeOrder = ['legendary', 'epic', 'rare', 'uncommon'];
+      for (const rarity of guaranteeOrder) {
+        const needed = packType.guarantees[rarity as keyof typeof packType.guarantees] || 0;
+        for (let i = 0; i < needed; i++) {
+          const card = pickFromRarity(rarity);
+          if (card) addCard(card);
+        }
+      }
+
+      // STEP 2: Fill remaining slots with weighted random picks
+      let attempts = 0;
+      const maxAttempts = packType.cards * 10; // Safety limit
+      
+      while (selectedCards.length < packType.cards && attempts < maxAttempts) {
+        attempts++;
+        const card = pickWeighted();
+        if (!card) {
+          console.log('pickWeighted returned null at attempt', attempts, '- selected so far:', selectedCards.length);
+          console.log('Design counts:', designCounts);
+          break;
+        }
+        addCard(card);
+      }
+
+      console.log('🎲 Selected:', selectedCards.length, 'cards after', attempts, 'attempts');
+      console.log('🎲 Rarity breakdown:', selectedCards.reduce((acc, c) => {
+        const r = (c.card_designs as unknown as CardDesign).rarity;
+        acc[r] = (acc[r] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>));
+      console.log('🎲 Design distribution:', Object.entries(designCounts).map(([id, count]) => {
+        const design = cardsByDesign[id];
+        return `${design?.cards[0]?.card_designs?.name || id.slice(0,8)}: ${count}`;
+      }).join(', '));
+      console.log('🎲 Unique designs in pack:', Object.keys(designCounts).length);
+
+      if (selectedCards.length === 0) {
+        Alert.alert('Error', 'No cards available!');
         setLoading(false);
         return;
       }
-      
-      // Build weighted design pool for random selection
-      const weightedDesigns: { designId: string; weight: number }[] = [];
-      for (const designId of designIds) {
-        const rarity = cardsByDesign[designId].rarity;
-        const weight = RARITY_WEIGHTS[rarity] || 10;
-        weightedDesigns.push({ designId, weight });
-      }
-      
-      // Function to pick a random design based on weight
-      const pickWeightedDesign = (designs: typeof weightedDesigns): string | null => {
-        if (designs.length === 0) return null;
-        const totalWeight = designs.reduce((sum, d) => sum + d.weight, 0);
-        let random = Math.random() * totalWeight;
-        for (const d of designs) {
-          random -= d.weight;
-          if (random <= 0) return d.designId;
-        }
-        return designs[designs.length - 1].designId;
-      };
-      
-      // Select cards for the booster
-      const selectedCards: AvailableCard[] = [];
-      const designCounts: Record<string, number> = {};
-      let availableDesigns = [...weightedDesigns];
-      
-      // Keep picking until we have 6 cards
-      while (selectedCards.length < CARDS_PER_PACK && availableDesigns.length > 0) {
-        // Pick a design based on rarity weight
-        const pickedDesignId = pickWeightedDesign(availableDesigns);
-        if (!pickedDesignId) break;
-        
-        const designData = cardsByDesign[pickedDesignId];
-        const currentCount = designCounts[pickedDesignId] || 0;
-        
-        // Check if we can add more from this design (max 2)
-        if (currentCount < MAX_SAME_DESIGN && designData.cards.length > currentCount) {
-          // Add one card from this design
-          selectedCards.push(designData.cards[currentCount]);
-          designCounts[pickedDesignId] = currentCount + 1;
-          
-          // If we've hit the max for this design, remove it from available pool
-          if (designCounts[pickedDesignId] >= MAX_SAME_DESIGN || 
-              designCounts[pickedDesignId] >= designData.cards.length) {
-            availableDesigns = availableDesigns.filter(d => d.designId !== pickedDesignId);
-          }
-        } else {
-          // Can't add more from this design, remove it
-          availableDesigns = availableDesigns.filter(d => d.designId !== pickedDesignId);
-        }
-      }
-      
-      console.log('Selected cards:', selectedCards.length);
-      console.log('Design distribution:', designCounts);
-      
-      // Check if we have enough cards
-      if (selectedCards.length < CARDS_PER_PACK) {
-        console.log('WARNING: Only got', selectedCards.length, 'cards - not enough variety in pool');
-        if (selectedCards.length === 0) {
-          Alert.alert('Error', 'No cards available in the pool!');
-          setLoading(false);
-          return;
-        }
-        // Continue with fewer cards if that's all we have
-      }
-      
-      console.log('Proceeding with', selectedCards.length, 'cards');
 
-      // Deduct ducats from player
+      // Deduct ducats
       const { error: ducatError } = await (supabase
         .from('players') as any)
-        .update({ ducats: (player.ducats || 0) - BOOSTER_COST })
+        .update({ ducats: (player.ducats || 0) - packType.cost })
         .eq('id', player.id);
 
       if (ducatError) throw ducatError;
 
-      // Assign cards to player
-      const cardIds = selectedCards.map(c => c.id);
+      // Assign cards
       const { error: assignError } = await (supabase
         .from('card_instances') as any)
         .update({ owner_id: player.id })
-        .in('id', cardIds);
+        .in('id', selectedCards.map(c => c.id));
 
       if (assignError) throw assignError;
 
       // Record transaction
       await (supabase.from('transactions') as any).insert({
-        type: 'purchase' as const,
+        type: 'purchase',
         to_player_id: player.id,
-        ducats_amount: BOOSTER_COST,
-        description: `Purchased booster pack (${selectedCards.length} cards)`,
+        ducats_amount: packType.cost,
+        description: `Purchased ${packType.name} (${selectedCards.length} cards)`,
       });
 
-      // Prepare revealed cards
+      // Prepare revealed cards (sorted by rarity for dramatic reveal)
       const revealed: RevealedCard[] = selectedCards.map(card => ({
         instanceId: card.id,
         design: card.card_designs as unknown as CardDesign,
       }));
-
-      // Sort by rarity for dramatic effect (common first, legendary last)
-      const rarityOrder = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
-      revealed.sort((a, b) => rarityOrder[a.design.rarity] - rarityOrder[b.design.rarity]);
+      
+      revealed.sort((a, b) => 
+        RARITY_ORDER.indexOf(a.design.rarity) - RARITY_ORDER.indexOf(b.design.rarity)
+      );
 
       console.log('=== BOOSTER PURCHASE SUCCESS ===');
       setRevealedCards(revealed);
       setShowReveal(true);
 
-      // Refresh player data and available count
       if (refreshPlayer) refreshPlayer();
       loadAvailableCards();
 
     } catch (error) {
       console.error('=== BOOSTER PURCHASE FAILED ===', error);
-      Alert.alert('Error', 'Failed to purchase booster pack. Please try again.');
+      Alert.alert('Error', 'Failed to purchase. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const canAfford = (player?.ducats || 0) >= BOOSTER_COST;
-  const hasCards = availableCount >= CARDS_PER_PACK;
+  const canAffordPack = (pack: BoosterPackType) => (player?.ducats || 0) >= pack.cost;
+  const hasEnoughCards = (pack: BoosterPackType) => availableCount >= pack.cards;
 
   return (
     <LinearGradient
@@ -365,116 +489,110 @@ export default function ShopScreen() {
           </View>
         </View>
 
-        {/* Featured Booster Pack */}
-        <View style={styles.featuredSection}>
-          <Text style={styles.sectionTitle}>Featured</Text>
+        {/* Pool Info */}
+        <View style={styles.poolInfo}>
+          <Text style={styles.poolIcon}>📦</Text>
+          <Text style={styles.poolText}>{availableCount.toLocaleString()} cards in pool</Text>
+        </View>
+
+        {/* Booster Packs Grid */}
+        <View style={styles.packsSection}>
+          <Text style={styles.sectionTitle}>🎁 Booster Packs</Text>
+          <Text style={styles.sectionSubtitle}>Choose your pack size • Max 2 of same card per pack</Text>
           
-          <Pressable
-            onPress={purchaseBooster}
-            disabled={loading || !canAfford || !hasCards}
-            style={({ pressed }) => [
-              styles.boosterCard,
-              pressed && styles.boosterCardPressed,
-              (!canAfford || !hasCards) && styles.boosterCardDisabled,
-            ]}
-          >
-            <LinearGradient
-              colors={['#1e40af', '#3b82f6', '#60a5fa']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.boosterGradient}
-            >
-              {/* Decorative elements */}
-              <View style={styles.sparkleContainer}>
-                <Text style={styles.sparkle1}>✨</Text>
-                <Text style={styles.sparkle2}>⭐</Text>
-                <Text style={styles.sparkle3}>✨</Text>
-              </View>
-
-              <Animated.View
-                style={[
-                  styles.boosterPackImage,
-                  { transform: [{ translateY: packFloat }] },
-                ]}
-              >
-                <Text style={styles.packEmoji}>🎁</Text>
-              </Animated.View>
-
-              <View style={styles.boosterInfo}>
-                <Text style={styles.boosterTitle}>BOOSTER PACK</Text>
-                <Text style={styles.boosterDescription}>
-                  Get 6 random cards from the minting pool!
-                </Text>
-                <View style={styles.boosterMeta}>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaIcon}>🃏</Text>
-                    <Text style={styles.metaText}>{CARDS_PER_PACK} Cards</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaIcon}>🎲</Text>
-                    <Text style={styles.metaText}>Random Rarity</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.priceSection}>
-                <View style={styles.priceTag}>
-                  <Text style={styles.priceEmoji}>💰</Text>
-                  <Text style={styles.priceValue}>{BOOSTER_COST}</Text>
-                </View>
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.buyText}>
-                    {!hasCards ? 'SOLD OUT' : !canAfford ? 'NOT ENOUGH' : 'TAP TO BUY'}
-                  </Text>
-                )}
-              </View>
-            </LinearGradient>
-          </Pressable>
-
-          {/* Pool info */}
-          <View style={styles.poolInfo}>
-            <Text style={styles.poolText}>
-              📦 {availableCount} cards available in the pool
-            </Text>
+          <View style={styles.packsGrid}>
+            {BOOSTER_PACKS.map((pack) => {
+              const canAfford = canAffordPack(pack);
+              const hasCards = hasEnoughCards(pack);
+              const isDisabled = loading || !canAfford || !hasCards;
+              
+              return (
+                <Pressable
+                  key={pack.id}
+                  onPress={() => purchaseBooster(pack)}
+                  disabled={isDisabled}
+                  style={({ pressed }) => [
+                    styles.packCard,
+                    pressed && styles.packCardPressed,
+                    isDisabled && styles.packCardDisabled,
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[pack.color1, pack.color2, pack.color3]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.packGradient}
+                  >
+                    {/* Icon */}
+                    <Text style={styles.packIcon}>{pack.icon}</Text>
+                    
+                    {/* Info */}
+                    <Text style={styles.packName}>{pack.name}</Text>
+                    <Text style={styles.packCards}>🃏 {pack.cards} Cards</Text>
+                    
+                    {/* Guarantees */}
+                    <View style={styles.guaranteesRow}>
+                      {pack.guarantees.legendary && (
+                        <View style={[styles.guaranteeBadge, { backgroundColor: '#f59e0b' }]}>
+                          <Text style={styles.guaranteeText}>👑 {pack.guarantees.legendary}</Text>
+                        </View>
+                      )}
+                      {pack.guarantees.epic && (
+                        <View style={[styles.guaranteeBadge, { backgroundColor: '#a855f7' }]}>
+                          <Text style={styles.guaranteeText}>💎 {pack.guarantees.epic}</Text>
+                        </View>
+                      )}
+                      {pack.guarantees.rare && (
+                        <View style={[styles.guaranteeBadge, { backgroundColor: '#3b82f6' }]}>
+                          <Text style={styles.guaranteeText}>⭐ {pack.guarantees.rare}</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    {/* Price */}
+                    <View style={styles.packPriceRow}>
+                      <Text style={styles.packPrice}>💰 {pack.cost}</Text>
+                      {loading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.packStatus}>
+                          {!hasCards ? '❌' : !canAfford ? '🔒' : '✓'}
+                        </Text>
+                      )}
+                    </View>
+                  </LinearGradient>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
-        {/* Rarity Guide */}
-        <View style={styles.raritySection}>
-          <Text style={styles.sectionTitle}>Rarity Guide</Text>
-          <View style={styles.rarityGrid}>
-            <View style={styles.rarityItem}>
-              <View style={[styles.rarityDot, { backgroundColor: '#6b7280' }]} />
-              <Text style={styles.rarityLabel}>Common</Text>
+        {/* Rarity Legend */}
+        <View style={styles.legendSection}>
+          <Text style={styles.legendTitle}>Rarity Legend</Text>
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#6b7280' }]} />
+              <Text style={styles.legendText}>Common</Text>
             </View>
-            <View style={styles.rarityItem}>
-              <View style={[styles.rarityDot, { backgroundColor: '#22c55e' }]} />
-              <Text style={styles.rarityLabel}>Uncommon</Text>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#22c55e' }]} />
+              <Text style={styles.legendText}>Uncommon</Text>
             </View>
-            <View style={styles.rarityItem}>
-              <View style={[styles.rarityDot, { backgroundColor: '#3b82f6' }]} />
-              <Text style={styles.rarityLabel}>Rare</Text>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#3b82f6' }]} />
+              <Text style={styles.legendText}>Rare</Text>
             </View>
-            <View style={styles.rarityItem}>
-              <View style={[styles.rarityDot, { backgroundColor: '#a855f7' }]} />
-              <Text style={styles.rarityLabel}>Epic</Text>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#a855f7' }]} />
+              <Text style={styles.legendText}>Epic</Text>
             </View>
-            <View style={styles.rarityItem}>
-              <View style={[styles.rarityDot, { backgroundColor: '#f59e0b' }]} />
-              <Text style={styles.rarityLabel}>Legendary</Text>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+              <Text style={styles.legendText}>Legendary</Text>
             </View>
           </View>
         </View>
-
-        {/* Test Button for Debug */}
-        <Pressable
-          style={{ padding: 10, backgroundColor: '#ff6b6b', marginBottom: 10 }}
-          onPress={testAddDucats}
-        >
-          <Text style={{ color: 'white', textAlign: 'center' }}>🧪 Test Add Ducats (Debug)</Text>
-        </Pressable>
 
         {/* Buy Ducats Section */}
         <View style={styles.ducatsSection}>
@@ -587,10 +705,10 @@ export default function ShopScreen() {
 
           try {
             // Get current player data
-            const { data: playerData, error: selectError } = await supabase
-              .from('players')
+            const { data: playerData, error: selectError } = await (supabase
+              .from('players') as any)
               .select('id, ducats')
-              .eq('user_id', user?.id)
+              .eq('user_id', user?.id || '')
               .single();
 
             if (selectError) {
@@ -604,10 +722,10 @@ export default function ShopScreen() {
             console.log(`💰 Updating ducats: ${currentDucats} → ${newDucats}`);
 
             // Update ducat balance
-            const { error: updateError } = await supabase
-              .from('players')
+            const { error: updateError } = await (supabase
+              .from('players') as any)
               .update({ ducats: newDucats })
-              .eq('user_id', user?.id);
+              .eq('user_id', user?.id || '');
 
             if (updateError) {
               console.error('❌ Ducat update failed:', updateError);
@@ -616,8 +734,8 @@ export default function ShopScreen() {
 
             // Record transaction (non-blocking)
             try {
-              await supabase
-                .from('transactions')
+              await (supabase
+                .from('transactions') as any)
                 .insert({
                   type: 'deposit',
                   to_player_id: playerData.id,
@@ -641,11 +759,11 @@ export default function ShopScreen() {
               [{ text: 'Awesome!' }]
             );
 
-          } catch (error) {
+          } catch (error: any) {
             console.error('💥 Ducat crediting failed:', error);
             Alert.alert(
               '⚠️ Payment Received',
-              `Your payment was received (${signature.slice(0, 8)}...) but ducat crediting failed.\n\n${error.message}`,
+              `Your payment was received (${signature.slice(0, 8)}...) but ducat crediting failed.\n\n${error?.message || 'Unknown error'}`,
               [{ text: 'Contact Support' }]
             );
             setShowCryptoPayment(false);
@@ -829,42 +947,152 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   poolInfo: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  poolText: {
-    color: '#64748b',
-    fontSize: 13,
-  },
-
-  // Rarity section
-  raritySection: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  rarityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  rarityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.8)',
-    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
     paddingVertical: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    backgroundColor: 'rgba(30, 41, 59, 0.6)',
     borderRadius: 8,
     gap: 8,
   },
-  rarityDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  poolIcon: {
+    fontSize: 16,
   },
-  rarityLabel: {
-    color: '#f8fafc',
+  poolText: {
+    color: '#94a3b8',
     fontSize: 13,
     fontWeight: '500',
+  },
+
+  // Packs section
+  packsSection: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  sectionSubtitle: {
+    color: '#64748b',
+    fontSize: 12,
+    marginBottom: spacing.md,
+    marginTop: -8,
+  },
+  packsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  packCard: {
+    width: '48%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    marginBottom: spacing.sm,
+  },
+  packCardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
+  },
+  packCardDisabled: {
+    opacity: 0.5,
+  },
+  packGradient: {
+    padding: spacing.md,
+    alignItems: 'center',
+    minHeight: 180,
+    justifyContent: 'space-between',
+  },
+  packIcon: {
+    fontSize: 36,
+    marginBottom: 4,
+  },
+  packName: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  packCards: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  guaranteesRow: {
+    flexDirection: 'row',
+    gap: 4,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginVertical: 4,
+  },
+  guaranteeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  guaranteeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  packPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 4,
+  },
+  packPrice: {
+    color: '#fbbf24',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  packStatus: {
+    fontSize: 14,
+  },
+
+  // Legend section
+  legendSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  legendTitle: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    color: '#94a3b8',
+    fontSize: 11,
   },
 
   // Tips section
