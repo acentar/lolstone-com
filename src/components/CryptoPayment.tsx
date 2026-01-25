@@ -63,7 +63,7 @@ export default function CryptoPayment({
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
   const [memeCoinPrice, setMemeCoinPrice] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'usdc' | 'sol' | 'meme'>('usdc');
+  const [paymentMethod, setPaymentMethod] = useState<'usdc' | 'sol' | 'meme'>('meme');
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
@@ -182,49 +182,21 @@ export default function CryptoPayment({
     setError(null);
 
     try {
-      let transaction;
-      
-      if (paymentMethod === 'sol') {
-        // Create SOL transfer transaction
-        if (!solPrice) {
-          throw new Error('SOL price not available. Please try again.');
-        }
-        console.log('Creating SOL transfer transaction...');
-        console.log('Sender:', publicKey.toString ? publicKey.toString() : publicKey);
-        console.log('Amount (ducats):', selectedPackage.ducats);
-        console.log('SOL price:', solPrice);
-        
-        transaction = await createSolTransferTransaction(
-          publicKey,
-          selectedPackage.ducats,
-          solPrice,
-          connection // May be null if RPC failed, Phantom will handle
-        );
-      } else if (paymentMethod === 'meme') {
-        // Create Meme Coin transfer transaction
-        if (!memeCoinPrice) {
-          throw new Error('Meme coin price not available. Please try again.');
-        }
-        console.log('Creating Meme Coin transfer transaction...');
-        console.log('Sender:', publicKey.toString ? publicKey.toString() : publicKey);
-        console.log('Amount (ducats):', selectedPackage.ducats);
-        console.log('Meme coin price:', memeCoinPrice);
-        
-        transaction = await createMemeCoinTransferTransaction(
-          publicKey,
-          selectedPackage.ducats,
-          memeCoinPrice,
-          connection
-        );
-      } else {
-        // Create USDC transfer transaction
-        console.log('Creating USDC transfer transaction...');
-        transaction = await createUsdcTransferTransaction(
-          publicKey,
-          selectedPackage.ducats,
-          connection
-        );
+      // Only LOLS payment is allowed
+      if (!memeCoinPrice) {
+        throw new Error('LOLS price not available. Please try again.');
       }
+      console.log('Creating LOLS transfer transaction...');
+      console.log('Sender:', publicKey.toString ? publicKey.toString() : publicKey);
+      console.log('Amount (ducats):', selectedPackage.ducats);
+      console.log('LOLS price:', memeCoinPrice);
+      
+      const transaction = await createMemeCoinTransferTransaction(
+        publicKey,
+        selectedPackage.ducats,
+        memeCoinPrice,
+        connection
+      );
 
       console.log('Transaction created, sending to Phantom...');
       const sig = await signAndSendTransaction(transaction);
@@ -357,30 +329,7 @@ export default function CryptoPayment({
         <Animated.View entering={SlideInUp} style={styles.paymentMethodContainer}>
           <Text style={styles.methodTitle}>Payment Method</Text>
           <View style={styles.methodOptions}>
-            <Pressable
-              style={[styles.methodOption, paymentMethod === 'usdc' && styles.methodSelected]}
-              onPress={() => setPaymentMethod('usdc')}
-            >
-              <Text style={styles.methodIcon}>💵</Text>
-              <Text style={styles.methodLabel}>USDC</Text>
-              <Text style={styles.methodAmount}>
-                ${selectedPackage.usd.toFixed(2)}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.methodOption, paymentMethod === 'sol' && styles.methodSelected]}
-              onPress={() => setPaymentMethod('sol')}
-            >
-              <Text style={styles.methodIcon}>◎</Text>
-              <Text style={styles.methodLabel}>SOL</Text>
-              <Text style={styles.methodAmount}>
-                {solPrice ? formatSolAmount(calculateSolAmount(selectedPackage.ducats, solPrice)) : '...'} SOL
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.methodOption, paymentMethod === 'meme' && styles.methodSelected]}
-              onPress={() => setPaymentMethod('meme')}
-            >
+            <View style={[styles.methodOption, styles.methodSelected]}>
               <View style={styles.methodLogoContainer}>
                 <View style={styles.methodLogoTopContainer}>
                   <Text style={styles.methodLogoTop}>L</Text>
@@ -399,7 +348,7 @@ export default function CryptoPayment({
               <Text style={styles.methodAmount}>
                 {memeCoinPrice ? `${formatMemeCoinAmount(calculateMemeCoinAmount(selectedPackage.ducats, memeCoinPrice))} LOLS` : '...'}
               </Text>
-            </Pressable>
+            </View>
           </View>
         </Animated.View>
       )}
@@ -414,11 +363,7 @@ export default function CryptoPayment({
             style={styles.buyButtonGradient}
           >
             <Text style={styles.buyButtonText}>
-              {paymentMethod === 'sol' 
-                ? '◎ Pay with SOL' 
-                : paymentMethod === 'meme'
-                ? 'Pay with LOLS'
-                : '💵 Pay with USDC'}
+              Pay with LOLS
             </Text>
           </LinearGradient>
         </Pressable>

@@ -676,7 +676,7 @@ export default function ShopScreen() {
                 <Text style={styles.cryptoTitle}>
                   {connected ? 'Buy Ducats Now' : 'Phantom Wallet'}
                 </Text>
-                <Text style={styles.cryptoSubtitle}>Pay with USDC, SOL, or Meme Coin</Text>
+                <Text style={styles.cryptoSubtitle}>Pay with LOLS</Text>
               </View>
               <View style={styles.cryptoArrow}>
                 <Text style={styles.arrowText}>→</Text>
