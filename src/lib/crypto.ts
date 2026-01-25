@@ -208,12 +208,12 @@ export function formatMemeCoinAmount(tokens: number): string {
  * Ducat packages for purchase
  */
 export const DUCAT_PACKAGES = [
-  { ducats: 50, usd: 5, label: 'Mini Pack' },
-  { ducats: 250, usd: 25, label: 'Starter Pack' },
-  { ducats: 500, usd: 50, label: 'Value Pack' },
-  { ducats: 1250, usd: 125, label: 'Premium Pack' },
-  { ducats: 2500, usd: 250, label: 'Whale Pack' },
-  { ducats: 5000, usd: 500, label: 'Mega Pack' },
+  { ducats: 100, usd: 5, label: 'Mini Pack' },
+  { ducats: 500, usd: 25, label: 'Starter Pack' },
+  { ducats: 1000, usd: 50, label: 'Value Pack' },
+  { ducats: 2500, usd: 125, label: 'Premium Pack' },
+  { ducats: 5000, usd: 250, label: 'Whale Pack' },
+  { ducats: 10000, usd: 500, label: 'Mega Pack' },
 ];
 
 /**
