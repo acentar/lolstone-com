@@ -165,6 +165,12 @@ export default function PlayerLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="trade"
+        options={{
+          href: null, // Hidden - not active yet
+        }}
+      />
     </Tabs>
     </View>
   );

@@ -4,34 +4,38 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { Database } from '../types/database';
 
-// Get environment variables with fallbacks
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
-  (typeof window !== 'undefined' && (window as any).__ENV__?.EXPO_PUBLIC_SUPABASE_URL) ||
-  '';
+// Get environment variables - these are baked in at build time for Expo static exports
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
-  (typeof window !== 'undefined' && (window as any).__ENV__?.EXPO_PUBLIC_SUPABASE_ANON_KEY) ||
-  '';
+// Log configuration status (helpful for debugging production issues)
+console.log('🔧 Supabase Config:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  urlPreview: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'MISSING',
+  keyPreview: supabaseAnonKey ? supabaseAnonKey.substring(0, 10) + '...' : 'MISSING',
+});
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
-  const missingVars = [];
+  const missingVars: string[] = [];
   if (!supabaseUrl) missingVars.push('EXPO_PUBLIC_SUPABASE_URL');
   if (!supabaseAnonKey) missingVars.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
   
   console.error('❌ Missing required environment variables:', missingVars.join(', '));
-  console.error('💡 Make sure to set these in your Vercel project settings:');
-  console.error('   - Go to Vercel Dashboard → Your Project → Settings → Environment Variables');
-  console.error('   - Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
-  console.error('   - Redeploy after adding the variables');
-  
-  if (typeof window !== 'undefined') {
-    console.error('Current env check:', {
-      hasUrl: !!supabaseUrl,
-      hasKey: !!supabaseAnonKey,
-      processEnv: Object.keys(process.env).filter(k => k.includes('SUPABASE')),
-    });
-  }
+  console.error('');
+  console.error('💡 FOR VERCEL DEPLOYMENT:');
+  console.error('   1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables');
+  console.error('   2. Add these variables:');
+  console.error('      - EXPO_PUBLIC_SUPABASE_URL = https://taovuehsewbomdptruln.supabase.co');
+  console.error('      - EXPO_PUBLIC_SUPABASE_ANON_KEY = your_anon_key');
+  console.error('   3. Make sure "Production", "Preview", and "Development" are ALL checked');
+  console.error('   4. IMPORTANT: You must REDEPLOY after adding variables!');
+  console.error('      - Go to Deployments tab');
+  console.error('      - Click "..." on latest deployment → "Redeploy"');
+  console.error('');
+  console.error('⚠️ Environment variables are baked in at BUILD TIME, not runtime.');
+  console.error('   Simply adding them does NOT fix existing deployments!');
 }
 
 // Check if we're in a browser environment (not SSR/Node)
