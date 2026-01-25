@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "build": "expo export --platform web",
-    "vercel-build": "expo export --platform web"
+    "vercel-build": "echo 'Building with env:' && echo \"EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL\" && expo export --platform web"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
