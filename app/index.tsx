@@ -372,19 +372,6 @@ export default function LandingPage() {
               <Text style={styles.newsCardLink}>Read more →</Text>
             </View>
           </Pressable>
-
-          <Pressable 
-            style={styles.newsCard}
-            onPress={() => router.push('/news/lolstone-token')}
-          >
-            <View style={styles.newsCardContent}>
-              <Text style={styles.newsCardTitle}>$lolstone Token</Text>
-              <Text style={styles.newsCardDescription}>
-                Discover the native cryptocurrency powering the Lolstone ecosystem. Learn about tokenomics, rewards, and earning opportunities.
-              </Text>
-              <Text style={styles.newsCardLink}>Read more →</Text>
-            </View>
-          </Pressable>
         </View>
       </View>
 
