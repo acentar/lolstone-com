@@ -12,7 +12,7 @@ let Transaction: any;
 let clusterApiUrl: any;
 let getAssociatedTokenAddress: any;
 let createTransferInstruction: any;
-let createAssociatedTokenAccountInstruction: any;
+let createAssociatedTokenAccountIdempotent: any;
 let TOKEN_PROGRAM_ID: any;
 let ASSOCIATED_TOKEN_PROGRAM_ID: any;
 
@@ -29,7 +29,7 @@ const loadSolanaLibs = async () => {
     const spl = await import('@solana/spl-token');
     getAssociatedTokenAddress = spl.getAssociatedTokenAddress;
     createTransferInstruction = spl.createTransferInstruction;
-    createAssociatedTokenAccountInstruction = spl.createAssociatedTokenAccountInstruction;
+    createAssociatedTokenAccountIdempotent = spl.createAssociatedTokenAccountIdempotent;
     TOKEN_PROGRAM_ID = spl.TOKEN_PROGRAM_ID;
     ASSOCIATED_TOKEN_PROGRAM_ID = spl.ASSOCIATED_TOKEN_PROGRAM_ID;
   }
@@ -360,14 +360,13 @@ export async function createMemeCoinTransferTransaction(
   // Create transaction
   const transaction = new Transaction();
 
-  // Always add ATA creation instruction if it doesn't exist
-  // This is safe - if the ATA already exists, Solana will skip the instruction
-  // Phantom and other wallets handle this automatically, but we need to do it programmatically
-  console.log('📦 Adding ATA creation instruction (will be skipped if ATA already exists)...');
-  const createATAInstruction = createAssociatedTokenAccountInstruction(
+  // Add idempotent ATA creation instruction
+  // This will create the ATA if it doesn't exist, or succeed silently if it already exists
+  // This matches what Phantom does automatically when you send tokens manually
+  console.log('📦 Adding idempotent ATA creation instruction...');
+  const createATAInstruction = createAssociatedTokenAccountIdempotent(
     senderPublicKey, // Payer (sender pays for account creation)
-    receiverATA,     // ATA address
-    receiver,       // Owner (receiver wallet)
+    receiver,        // Owner (receiver wallet)
     mint,            // Token mint
     TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID
