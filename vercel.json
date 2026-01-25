@@ -6,6 +6,22 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
+    },
+    {
+      "source": "/card/:id",
+      "destination": "/card/[id].html"
+    },
+    {
+      "source": "/news/:slug",
+      "destination": "/news/[slug].html"
+    },
+    {
+      "source": "/player/game/:id",
+      "destination": "/player/game/[id].html"
+    },
+    {
+      "source": "/player/deck/:id",
+      "destination": "/player/deck/[id].html"
     }
   ]
 }
