@@ -314,9 +314,9 @@ export default function CryptoPayment({
               <Text style={styles.packageDucatsLabel}>DUCATS</Text>
               <View style={styles.packagePriceContainer}>
                 <Text style={styles.packagePrice}>${pkg.usd}</Text>
-                {solPrice && (
+                {memeCoinPrice && (
                   <Text style={styles.packageSolPrice}>
-                    ≈ {formatSolAmount(calculateSolAmount(pkg.ducats, solPrice))} SOL
+                    ≈ {formatMemeCoinAmount(calculateMemeCoinAmount(pkg.ducats, memeCoinPrice))} LOLS
                   </Text>
                 )}
               </View>
