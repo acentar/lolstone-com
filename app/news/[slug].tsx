@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, Platform, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
@@ -27,6 +27,21 @@ const articles: Record<string, Article> = {
     content: [
       'Lolstone is the ultimate turn-based card game built entirely around internet culture. Think strategic duels like classic card battlers, but instead of wizards and dragons, your deck is packed with memes, viral roasts, trolls, reactions, and chaotic online moments that everyone recognizes.',
       'You and an opponent face off on the board. Each player starts with 30 health. Your goal is simple: reduce your opponent\'s health to zero before they do the same to you. Matches are quick, intense, and full of laugh-out-loud swings.',
+    ],
+  },
+  'lols-token': {
+    slug: 'lols-token',
+    title: '$LOLS Token',
+    description: 'Meet $LOLS - the official meme coin powering the Lolstone ecosystem. Purchase, trade, and use $LOLS to buy booster packs and participate in the game economy.',
+    metaTitle: '$LOLS Token - Official Meme Coin of Lolstone',
+    metaDescription: 'Discover $LOLS, the official meme coin integrated into Lolstone. Purchase on pump.fun, use it to buy booster packs, and participate in the game economy.',
+    hasTokenomics: false,
+    content: [
+      '$LOLS is the official meme coin of the Lolstone ecosystem, recently launched and fully integrated into our game economy. This isn\'t just another meme coin—it\'s the native currency that powers every transaction within Lolstone.',
+      'We\'ve made $LOLS the exclusive payment method for all in-game purchases. You can now only trade and purchase booster packs using $LOLS tokens, creating a seamless connection between the token and the game experience. This integration ensures that every player who wants to expand their collection must engage with the $LOLS ecosystem.',
+      'The token is available for purchase on pump.fun, making it easy for players and investors to acquire $LOLS and join the Lolstone community. Whether you\'re buying your first booster pack or building a legendary collection, $LOLS is your gateway to the game.',
+      'By requiring $LOLS for all booster pack purchases, we\'ve created a sustainable economic model where token utility drives real demand. As more players join and purchase packs, the demand for $LOLS increases, creating value for holders while ensuring the token remains accessible to new players.',
+      'The integration of $LOLS into Lolstone represents a new era of gaming where cryptocurrency and gameplay are truly intertwined. Players aren\'t just buying cards—they\'re participating in a token economy that grows with the game.',
     ],
   },
   'lolstone-token': {
@@ -390,6 +405,107 @@ export default function ArticlePage() {
                     </Pressable>
                   </View>
                 </View>
+              </View>
+            )}
+
+            {/* LOLS Token Section */}
+            {slug === 'lols-token' && (
+              <View style={styles.lolsTokenWrapper}>
+                <LinearGradient
+                  colors={[colors.primary + '10', colors.secondary + '05', colors.primary + '10']}
+                  style={styles.tokenGradient}
+                >
+                  <View style={styles.tokenContent}>
+                    <View style={styles.tokenHeader}>
+                      <Text style={styles.tokenMainTitle}>Get $LOLS</Text>
+                      <Text style={styles.tokenSubtitle}>Purchase on Pump.fun</Text>
+                    </View>
+
+                    <Pressable
+                      style={styles.purchaseButton}
+                      onPress={() => {
+                        if (typeof window !== 'undefined') {
+                          window.open('https://pump.fun/coin/BDD5XKXLSC6fSAFmTVpVWFTdfSSG7a2LTYxBXt6rpump', '_blank');
+                        }
+                      }}
+                    >
+                      <LinearGradient
+                        colors={['#8b5cf6', '#a855f7']}
+                        style={styles.purchaseButtonGradient}
+                      >
+                        <Text style={styles.purchaseButtonText}>🪙 Buy $LOLS on Pump.fun</Text>
+                      </LinearGradient>
+                    </Pressable>
+
+                    {/* Price Chart */}
+                    <View style={styles.chartContainer}>
+                      <Text style={styles.chartTitle}>Live Price Chart</Text>
+                      {Platform.OS === 'web' ? (
+                        <View style={styles.chartWrapper}>
+                          <iframe
+                            src="https://www.geckoterminal.com/solana/pools/3Hr5WfBvUYZToU974XrX5pGKb6H4siBvZFeYSiyeYUFk?embed=1&info=0&swaps=0"
+                            style={{
+                              width: '100%',
+                              height: '400px',
+                              border: 'none',
+                              borderRadius: '12px',
+                            }}
+                            title="$LOLS Price Chart"
+                          />
+                        </View>
+                      ) : (
+                        <Pressable
+                          style={styles.chartLinkButton}
+                          onPress={() => Linking.openURL('https://www.geckoterminal.com/solana/pools/3Hr5WfBvUYZToU974XrX5pGKb6H4siBvZFeYSiyeYUFk')}
+                        >
+                          <Text style={styles.chartLinkText}>View Price Chart on GeckoTerminal →</Text>
+                        </Pressable>
+                      )}
+                    </View>
+
+                    {/* Usage Section */}
+                    <View style={styles.usageSection}>
+                      <Text style={styles.usageTitle}>How to Use $LOLS</Text>
+                      <View style={styles.usageGrid}>
+                        <View style={styles.usageCard}>
+                          <Text style={styles.usageIcon}>💎</Text>
+                          <Text style={styles.usageCardTitle}>Buy Booster Packs</Text>
+                          <Text style={styles.usageCardDesc}>
+                            $LOLS is the exclusive payment method for all booster pack purchases in Lolstone
+                          </Text>
+                        </View>
+                        <View style={styles.usageCard}>
+                          <Text style={styles.usageIcon}>🔄</Text>
+                          <Text style={styles.usageCardTitle}>Trade Cards</Text>
+                          <Text style={styles.usageCardDesc}>
+                            Use $LOLS to trade cards with other players on the marketplace
+                          </Text>
+                        </View>
+                        <View style={styles.usageCard}>
+                          <Text style={styles.usageIcon}>📈</Text>
+                          <Text style={styles.usageCardTitle}>Hold & Earn</Text>
+                          <Text style={styles.usageCardDesc}>
+                            As the game grows, $LOLS value increases with player demand
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Integration Info */}
+                    <View style={styles.integrationCard}>
+                      <Text style={styles.integrationTitle}>Fully Integrated</Text>
+                      <Text style={styles.integrationText}>
+                        $LOLS is now the only accepted payment method for purchasing booster packs in Lolstone. 
+                        This creates direct utility and demand for the token, ensuring its value is tied to 
+                        the success and growth of the game.
+                      </Text>
+                      <Text style={styles.integrationText}>
+                        Connect your Phantom wallet in the shop to purchase ducats with $LOLS, then use those 
+                        ducats to buy booster packs and expand your collection.
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
               </View>
             )}
 
@@ -1132,5 +1248,121 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // LOLS Token Styles
+  lolsTokenWrapper: {
+    marginVertical: spacing.xl * 2,
+  },
+  purchaseButton: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: spacing.xl,
+  },
+  purchaseButtonGradient: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  purchaseButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  chartContainer: {
+    marginBottom: spacing.xl,
+  },
+  chartTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  chartWrapper: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 400,
+  },
+  chartLinkButton: {
+    backgroundColor: colors.primary + '20',
+    borderRadius: 12,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+    alignItems: 'center',
+  },
+  chartLinkText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  usageSection: {
+    marginBottom: spacing.xl,
+  },
+  usageTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  usageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    justifyContent: 'center',
+  },
+  usageCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flex: 1,
+    minWidth: 200,
+    maxWidth: 300,
+    alignItems: 'center',
+  },
+  usageIcon: {
+    fontSize: 32,
+    marginBottom: spacing.sm,
+  },
+  usageCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  usageCardDesc: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  integrationCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: spacing.xl,
+  },
+  integrationTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  integrationText: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    lineHeight: 24,
+    marginBottom: spacing.md,
   },
 });

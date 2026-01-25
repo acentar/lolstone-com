@@ -372,6 +372,19 @@ export default function LandingPage() {
               <Text style={styles.newsCardLink}>Read more →</Text>
             </View>
           </Pressable>
+
+          <Pressable 
+            style={styles.newsCard}
+            onPress={() => router.push('/news/lols-token')}
+          >
+            <View style={styles.newsCardContent}>
+              <Text style={styles.newsCardTitle}>$LOLS Token</Text>
+              <Text style={styles.newsCardDescription}>
+                Meet $LOLS - the official meme coin powering Lolstone. Purchase on pump.fun and use it to buy booster packs.
+              </Text>
+              <Text style={styles.newsCardLink}>Read more →</Text>
+            </View>
+          </Pressable>
         </View>
       </View>
 
