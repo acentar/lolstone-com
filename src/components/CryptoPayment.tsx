@@ -381,10 +381,23 @@ export default function CryptoPayment({
               style={[styles.methodOption, paymentMethod === 'meme' && styles.methodSelected]}
               onPress={() => setPaymentMethod('meme')}
             >
-              <Text style={styles.methodIcon}>🪙</Text>
-              <Text style={styles.methodLabel}>Meme</Text>
+              <View style={styles.methodLogoContainer}>
+                <View style={styles.methodLogoTopContainer}>
+                  <Text style={styles.methodLogoTop}>L</Text>
+                  <View style={styles.methodFunnyO}>
+                    <View style={styles.methodFunnyOInner}>
+                      <View style={styles.methodFunnyOLeftEye} />
+                      <View style={styles.methodFunnyORightEye} />
+                      <View style={styles.methodFunnyOMouth} />
+                    </View>
+                  </View>
+                  <Text style={styles.methodLogoTop}>L</Text>
+                </View>
+                <Text style={styles.methodLogoBottom}>STONE</Text>
+              </View>
+              <Text style={styles.methodLabel}>LOLS</Text>
               <Text style={styles.methodAmount}>
-                {memeCoinPrice ? formatMemeCoinAmount(calculateMemeCoinAmount(selectedPackage.ducats, memeCoinPrice)) : '...'}
+                {memeCoinPrice ? `${formatMemeCoinAmount(calculateMemeCoinAmount(selectedPackage.ducats, memeCoinPrice))} LOLS` : '...'}
               </Text>
             </Pressable>
           </View>
@@ -401,7 +414,11 @@ export default function CryptoPayment({
             style={styles.buyButtonGradient}
           >
             <Text style={styles.buyButtonText}>
-              {paymentMethod === 'sol' ? '◎ Pay with SOL' : '💵 Pay with USDC'}
+              {paymentMethod === 'sol' 
+                ? '◎ Pay with SOL' 
+                : paymentMethod === 'meme'
+                ? 'Pay with LOLS'
+                : '💵 Pay with USDC'}
             </Text>
           </LinearGradient>
         </Pressable>
@@ -684,6 +701,80 @@ const styles = StyleSheet.create({
   methodAmount: {
     fontSize: 12,
     color: '#9ca3af',
+  },
+  methodLogoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  methodLogoTopContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  methodLogoTop: {
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: '#00f5d4',
+    lineHeight: 16,
+  },
+  methodLogoBottom: {
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    color: '#ffffff',
+    lineHeight: 10,
+    marginTop: -2,
+    transform: [{ rotate: '-5deg' }],
+  },
+  methodFunnyO: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#00f5d4',
+    backgroundColor: 'rgba(0, 245, 212, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginHorizontal: 1,
+  },
+  methodFunnyOInner: {
+    width: 12,
+    height: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  methodFunnyOLeftEye: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#00f5d4',
+  },
+  methodFunnyORightEye: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#00f5d4',
+  },
+  methodFunnyOMouth: {
+    position: 'absolute',
+    bottom: 2,
+    width: 6,
+    height: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#00f5d4',
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
   },
   buyButton: {
     width: '100%',
