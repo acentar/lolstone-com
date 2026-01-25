@@ -104,11 +104,25 @@ export function useAuth() {
     // For unknown users, check player table
     console.log('🔍 Checking player status...');
     try {
-      const { data: playerData } = await supabase
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout after 10s')), 10000)
+      );
+      
+      const queryPromise = supabase
         .from('players')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
+      
+      const { data: playerData, error: queryError } = await Promise.race([
+        queryPromise,
+        timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))
+      ]) as any;
+      
+      if (queryError) {
+        console.error('❌ Player query error:', queryError);
+      }
       
       console.log('🔍 Player result:', playerData);
       
@@ -121,7 +135,7 @@ export function useAuth() {
         loading: false,
       });
     } catch (err) {
-      console.log('⚠️ Error:', err);
+      console.error('⚠️ checkUserRole error:', err);
       setState({
         session,
         user,
