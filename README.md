@@ -157,10 +157,34 @@ Access via `/gmp/login` with admin credentials:
 ## 🚀 Deployment
 
 ### Web Deployment (Vercel)
-```bash
-npm run build:web
-# Deploy the dist/ folder to Vercel
-```
+
+1. **Set Environment Variables in Vercel**
+   
+   ⚠️ **IMPORTANT**: For Expo static exports, environment variables must be set in Vercel **before** building.
+   
+   Go to your Vercel project:
+   - Dashboard → Your Project → Settings → Environment Variables
+   - Add the following variables:
+     - `EXPO_PUBLIC_SUPABASE_URL` = Your Supabase project URL
+     - `EXPO_PUBLIC_SUPABASE_ANON_KEY` = Your Supabase anon/public key
+   - Make sure to select **all environments** (Production, Preview, Development)
+   - Click "Save"
+
+2. **Redeploy**
+   
+   After adding environment variables, you **must redeploy**:
+   - Go to Deployments tab
+   - Click "..." on the latest deployment → "Redeploy"
+   - Or push a new commit to trigger a new deployment
+
+3. **Verify**
+   
+   After deployment, check the browser console. You should see:
+   - ✅ No errors about missing environment variables
+   - ✅ Successful connection to Supabase
+   - ✅ Data loading correctly
+
+**Note**: The `.env` file is only for local development. Vercel uses its own environment variables configured in the dashboard.
 
 ### Mobile Deployment
 ```bash
@@ -169,6 +193,22 @@ expo build:android
 ```
 
 ## 🐛 Troubleshooting
+
+### Environment Variables Not Working in Production
+
+**Symptoms**: App doesn't connect to Supabase, shows blank pages, or errors about missing variables.
+
+**Solution**:
+1. ✅ Verify environment variables are set in Vercel Dashboard
+2. ✅ Check that variables are named exactly: `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+3. ✅ Ensure variables are set for **all environments** (Production, Preview, Development)
+4. ✅ **Redeploy** after adding/changing environment variables (they're baked in at build time)
+5. ✅ Check browser console for error messages - the code will log helpful debugging info
+
+**Debug Steps**:
+- Open browser console on your deployed site
+- Look for error messages starting with "❌ Missing required environment variables"
+- The console will show which variables are missing and how to fix it
 
 ### Real-time Sync Issues
 If players aren't seeing updates in real-time:

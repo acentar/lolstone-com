@@ -4,8 +4,35 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { Database } from '../types/database';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+// Get environment variables with fallbacks
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
+  (typeof window !== 'undefined' && (window as any).__ENV__?.EXPO_PUBLIC_SUPABASE_URL) ||
+  '';
+
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
+  (typeof window !== 'undefined' && (window as any).__ENV__?.EXPO_PUBLIC_SUPABASE_ANON_KEY) ||
+  '';
+
+// Validate environment variables
+if (!supabaseUrl || !supabaseAnonKey) {
+  const missingVars = [];
+  if (!supabaseUrl) missingVars.push('EXPO_PUBLIC_SUPABASE_URL');
+  if (!supabaseAnonKey) missingVars.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  
+  console.error('❌ Missing required environment variables:', missingVars.join(', '));
+  console.error('💡 Make sure to set these in your Vercel project settings:');
+  console.error('   - Go to Vercel Dashboard → Your Project → Settings → Environment Variables');
+  console.error('   - Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  console.error('   - Redeploy after adding the variables');
+  
+  if (typeof window !== 'undefined') {
+    console.error('Current env check:', {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!supabaseAnonKey,
+      processEnv: Object.keys(process.env).filter(k => k.includes('SUPABASE')),
+    });
+  }
+}
 
 // Check if we're in a browser environment (not SSR/Node)
 // This needs to be a function so it's evaluated at runtime, not module load time
