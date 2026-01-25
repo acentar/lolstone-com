@@ -360,55 +360,19 @@ export async function createMemeCoinTransferTransaction(
   // Create transaction
   const transaction = new Transaction();
 
-  // Check if receiver ATA exists, and create it if it doesn't
-  // This is required before we can transfer tokens to it
-  if (connection) {
-    try {
-      const receiverATAInfo = await connection.getAccountInfo(receiverATA);
-      if (!receiverATAInfo) {
-        console.log('📦 Creating receiver ATA (does not exist yet)...');
-        // Create the associated token account instruction
-        const createATAInstruction = createAssociatedTokenAccountInstruction(
-          senderPublicKey, // Payer (sender pays for account creation)
-          receiverATA,     // ATA address
-          receiver,         // Owner (receiver wallet)
-          mint,            // Token mint
-          TOKEN_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID
-        );
-        transaction.add(createATAInstruction);
-      } else {
-        console.log('✅ Receiver ATA already exists');
-      }
-    } catch (error) {
-      console.warn('⚠️ Could not check receiver ATA, attempting to create it:', error);
-      // If we can't check, try to create it anyway
-      // If it already exists, the transaction will fail, but that's better than
-      // failing because it doesn't exist
-      const createATAInstruction = createAssociatedTokenAccountInstruction(
-        senderPublicKey,
-        receiverATA,
-        receiver,
-        mint,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      );
-      transaction.add(createATAInstruction);
-    }
-  } else {
-    // No connection available - try to create ATA anyway
-    // Phantom will handle the account check
-    console.log('⚠️ No connection available, adding ATA creation instruction (Phantom will verify)');
-    const createATAInstruction = createAssociatedTokenAccountInstruction(
-      senderPublicKey,
-      receiverATA,
-      receiver,
-      mint,
-      TOKEN_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID
-    );
-    transaction.add(createATAInstruction);
-  }
+  // Always add ATA creation instruction if it doesn't exist
+  // This is safe - if the ATA already exists, Solana will skip the instruction
+  // Phantom and other wallets handle this automatically, but we need to do it programmatically
+  console.log('📦 Adding ATA creation instruction (will be skipped if ATA already exists)...');
+  const createATAInstruction = createAssociatedTokenAccountInstruction(
+    senderPublicKey, // Payer (sender pays for account creation)
+    receiverATA,     // ATA address
+    receiver,       // Owner (receiver wallet)
+    mint,            // Token mint
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  transaction.add(createATAInstruction);
 
   // Create transfer instruction
   const transferInstruction = createTransferInstruction(
