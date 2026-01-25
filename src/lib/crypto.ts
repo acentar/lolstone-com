@@ -2,7 +2,7 @@
  * Crypto Payment Utilities
  *
  * Handles Solana/USDC price fetching and payment calculations.
- * 1 ducat = 0.01 USD
+ * 1 ducat = 0.10 USD (100 ducats = $10)
  */
 
 // Dynamic imports to avoid Buffer issues on initial load
@@ -61,8 +61,8 @@ export const USDC_DECIMALS = 6;
 // SOL decimals (9)
 export const SOL_DECIMALS = 9;
 
-// Ducat rate: 1 ducat = 0.01 USD
-export const DUCAT_USD_RATE = 0.01;
+// Ducat rate: 1 ducat = 0.10 USD (100 ducats = $10)
+export const DUCAT_USD_RATE = 0.10;
 
 // SOL price buffer (5% for volatility)
 export const SOL_PRICE_BUFFER = 0.05;
@@ -138,12 +138,12 @@ export function formatSolAmount(lamports: number): string {
  * Ducat packages for purchase
  */
 export const DUCAT_PACKAGES = [
-  { ducats: 100, usd: 1, label: 'Mini Pack' },
-  { ducats: 500, usd: 5, label: 'Starter Pack' },
-  { ducats: 1000, usd: 10, label: 'Value Pack' },
-  { ducats: 2500, usd: 25, label: 'Premium Pack' },
-  { ducats: 5000, usd: 50, label: 'Whale Pack' },
-  { ducats: 10000, usd: 100, label: 'Mega Pack' },
+  { ducats: 100, usd: 10, label: 'Mini Pack' },
+  { ducats: 500, usd: 50, label: 'Starter Pack' },
+  { ducats: 1000, usd: 100, label: 'Value Pack' },
+  { ducats: 2500, usd: 250, label: 'Premium Pack' },
+  { ducats: 5000, usd: 500, label: 'Whale Pack' },
+  { ducats: 10000, usd: 1000, label: 'Mega Pack' },
 ];
 
 /**

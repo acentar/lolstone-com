@@ -12,11 +12,12 @@ import Animated, {
   FadeIn,
   SlideInRight,
 } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { CardDesign, CardRarity, KEYWORD_INFO } from '../../src/types/database';
 import CardPreview from '../../src/components/CardPreview';
-import { spacing } from '../../src/constants/theme';
+import { spacing, colors } from '../../src/constants/theme';
 
 interface OwnedCard {
   card_instance_id: string;
@@ -41,6 +42,7 @@ const RARITY_COLORS: Record<CardRarity, { primary: string; glow: string }> = {
 };
 
 export default function CollectionScreen() {
+  const router = useRouter();
   const { player } = useAuthContext();
   const { width: screenWidth } = useWindowDimensions();
   const [cards, setCards] = useState<OwnedCard[]>([]);
@@ -388,6 +390,19 @@ export default function CollectionScreen() {
                         </View>
                       </View>
                     )}
+
+                    <Divider style={styles.divider} />
+
+                    {/* Public Page Link */}
+                    <Pressable
+                      style={styles.publicPageButton}
+                      onPress={() => {
+                        setShowModal(false);
+                        router.push(`/card/${design.id}`);
+                      }}
+                    >
+                      <Text style={styles.publicPageButtonText}>🌐 View Public Page</Text>
+                    </Pressable>
                   </Animated.View>
                 </View>
               </ScrollView>
@@ -399,17 +414,16 @@ export default function CollectionScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#0f172a', '#1e293b', '#0f172a']}
-      style={styles.container}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>My Collection</Text>
-        <Text style={styles.subtitle}>
-          {cards.length} unique cards • {cards.reduce((sum, c) => sum + c.count, 0)} total
-        </Text>
-      </View>
+    <View style={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.contentWrapper}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>My Collection</Text>
+            <Text style={styles.subtitle}>
+              {cards.length} unique cards • {cards.reduce((sum, c) => sum + c.count, 0)} total
+            </Text>
+          </View>
 
       {/* Search & Filter */}
       <View style={styles.filterSection}>
@@ -507,20 +521,35 @@ export default function CollectionScreen() {
           ))}
         </ScrollView>
       )}
+        </View>
+      </ScrollView>
 
       {/* Card Modal */}
       <CardModal />
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+    paddingTop: 82,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  contentWrapper: {
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
   },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
   title: {
@@ -534,7 +563,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   filterSection: {
-    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
   searchbar: {
@@ -829,6 +857,18 @@ const styles = StyleSheet.create({
   supplyValue: {
     color: '#f8fafc',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  publicPageButton: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  publicPageButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

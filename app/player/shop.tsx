@@ -9,13 +9,14 @@ import {
 } from 'react-native';
 import { Text, ActivityIndicator, Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { useWalletContext } from '../../src/context/WalletContext';
 import { CardDesign } from '../../src/types/database';
 import BoosterPackReveal from '../../src/components/BoosterPackReveal';
 import CryptoPayment from '../../src/components/CryptoPayment';
-import { spacing } from '../../src/constants/theme';
+import { spacing, colors } from '../../src/constants/theme';
 
 // Booster Pack Types
 interface BoosterPackType {
@@ -41,7 +42,7 @@ const BOOSTER_PACKS: BoosterPackType[] = [
     id: 'starter',
     name: 'Starter Pack',
     cards: 3,
-    cost: 30,
+    cost: 150,
     color1: '#374151',
     color2: '#4b5563',
     color3: '#6b7280',
@@ -53,7 +54,7 @@ const BOOSTER_PACKS: BoosterPackType[] = [
     id: 'basic',
     name: 'Basic Pack',
     cards: 6,
-    cost: 100,
+    cost: 350,
     color1: '#1e40af',
     color2: '#3b82f6',
     color3: '#60a5fa',
@@ -65,7 +66,7 @@ const BOOSTER_PACKS: BoosterPackType[] = [
     id: 'standard',
     name: 'Standard Pack',
     cards: 10,
-    cost: 150,
+    cost: 600,
     color1: '#166534',
     color2: '#22c55e',
     color3: '#4ade80',
@@ -77,7 +78,7 @@ const BOOSTER_PACKS: BoosterPackType[] = [
     id: 'premium',
     name: 'Premium Pack',
     cards: 15,
-    cost: 200,
+    cost: 1200,
     color1: '#7c3aed',
     color2: '#a855f7',
     color3: '#c084fc',
@@ -89,7 +90,7 @@ const BOOSTER_PACKS: BoosterPackType[] = [
     id: 'mega',
     name: 'Mega Pack',
     cards: 20,
-    cost: 280,
+    cost: 1800,
     color1: '#b45309',
     color2: '#f59e0b',
     color3: '#fbbf24',
@@ -101,7 +102,7 @@ const BOOSTER_PACKS: BoosterPackType[] = [
     id: 'ultimate',
     name: 'Ultimate Pack',
     cards: 30,
-    cost: 400,
+    cost: 3000,
     color1: '#dc2626',
     color2: '#ef4444',
     color3: '#f87171',
@@ -134,7 +135,8 @@ interface RevealedCard {
 }
 
 export default function ShopScreen() {
-  const { player, refreshPlayer, user } = useAuthContext();
+  const router = useRouter();
+  const { player, refreshPlayer, user, loading: authLoading } = useAuthContext();
   const { connected, publicKey, connect, connecting } = useWalletContext();
   const [loading, setLoading] = useState(false);
   const [availableCount, setAvailableCount] = useState(0);
@@ -145,6 +147,30 @@ export default function ShopScreen() {
   
   // Animation for the pack
   const packFloat = useState(new Animated.Value(0))[0];
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !player) {
+      router.replace('/auth/player');
+    }
+  }, [player, authLoading, router]);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Don't render if not logged in (will redirect)
+  if (!player) {
+    return null;
+  }
 
   useEffect(() => {
     loadAvailableCards();
@@ -471,23 +497,21 @@ export default function ShopScreen() {
   const hasEnoughCards = (pack: BoosterPackType) => availableCount >= pack.cards;
 
   return (
-    <LinearGradient
-      colors={['#0f172a', '#1e293b', '#0f172a']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <ScrollView 
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Card Shop</Text>
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceEmoji}>💰</Text>
-            <Text style={styles.balanceValue}>{player?.ducats?.toLocaleString() || 0}</Text>
+        <View style={styles.contentWrapper}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Card Shop</Text>
+            <View style={styles.balanceCard}>
+              <Text style={styles.balanceEmoji}>💰</Text>
+              <Text style={styles.balanceValue}>{player?.ducats?.toLocaleString() || 0}</Text>
+            </View>
           </View>
-        </View>
 
         {/* Pool Info */}
         <View style={styles.poolInfo}>
@@ -671,16 +695,17 @@ export default function ShopScreen() {
           </View>
         </View>
 
-        {/* Tips */}
-        <View style={styles.tipsSection}>
-          <Text style={styles.sectionTitle}>💡 Tips</Text>
-          <View style={styles.tipCard}>
-            <Text style={styles.tipText}>
-              • Build a deck of 30 cards to start playing matches{'\n'}
-              • Legendary cards have powerful unique abilities{'\n'}
-              • Win matches to earn more ducats{'\n'}
-              • Check your collection to see what you have
-            </Text>
+          {/* Tips */}
+          <View style={styles.tipsSection}>
+            <Text style={styles.sectionTitle}>💡 Tips</Text>
+            <View style={styles.tipCard}>
+              <Text style={styles.tipText}>
+                • Build a deck of 30 cards to start playing matches{'\n'}
+                • Legendary cards have powerful unique abilities{'\n'}
+                • Win matches to earn more ducats{'\n'}
+                • Check your collection to see what you have
+              </Text>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -770,26 +795,43 @@ export default function ShopScreen() {
           }
         }}
       />
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+    paddingTop: 82,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    fontSize: 16,
   },
   scroll: {
     flex: 1,
   },
-  content: {
+  scrollContent: {
     paddingBottom: 100,
+  },
+  contentWrapper: {
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
   title: {

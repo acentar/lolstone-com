@@ -212,7 +212,8 @@ export function executeEffect(
   effect: CardEffect,
   targets: ValidTarget[],
   sourcePlayerId: string,
-  sourceUnitId?: string | null
+  sourceUnitId?: string | null,
+  sourceCard?: CardInHand | null
 ): { state: GameState; result: EffectResult } {
   let newState = { ...state };
   const result: EffectResult = { success: true };
@@ -288,9 +289,14 @@ export function executeEffect(
         break;
       
       case 'summon':
-        // Summon tokens using the source unit's design
-        const sourceDesign = sourceUnit?.design;
-        
+        // Summon tokens using the source unit's design, or source card's design for action cards
+        let sourceDesign: CardDesignFull | undefined = sourceUnit?.design;
+
+        // If no source unit (action card), use the source card's design
+        if (!sourceDesign && sourceCard) {
+          sourceDesign = sourceCard.design;
+        }
+
         // If we have a source design with token configuration
         if (sourceDesign && sourceDesign.has_token && sourceDesign.token_name) {
           console.log('🎭 SUMMON: Creating token:', sourceDesign.token_name);
@@ -444,13 +450,14 @@ export function processEffectQueue(state: GameState): GameState {
       );
     }
     
-    // Execute the effect (pass sourceUnitId for summon effects)
+    // Execute the effect (pass pendingEffect for access to sourceCard)
     const { state: resultState } = executeEffect(
       newState,
       pendingEffect.effect,
       targets,
       pendingEffect.sourcePlayerId,
-      pendingEffect.sourceUnitId
+      pendingEffect.sourceUnitId,
+      pendingEffect.sourceCard
     );
     
     newState = resultState;

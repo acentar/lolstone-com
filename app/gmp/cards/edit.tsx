@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, useWindowDimensions, Pressable, Image, Alert } from 'react-native';
-import { 
+import {
   Text, Button, TextInput, Chip, Divider, IconButton, Card,
-  SegmentedButtons, ActivityIndicator, Switch,
+  SegmentedButtons, ActivityIndicator, Switch, Modal, Portal,
 } from 'react-native-paper';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -21,10 +21,117 @@ import TokenPreview from '../../../src/components/TokenPreview';
 const RARITIES: CardRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const CARD_TYPES: CardType[] = ['meme_minion', 'viral_spell', 'troll_legendary', 'reaction_trap', 'copypasta_enchantment'];
 const KEYWORDS: CardKeyword[] = ['frontline', 'quick', 'evasion', 'boost'];
+// IMPLEMENTED TRIGGERS (working in-game)
+const IMPLEMENTED_TRIGGERS: EffectTrigger[] = ['on_play', 'start_of_turn', 'end_of_turn'];
+
+// BROKEN TRIGGERS (not implemented in game engine)
+const BROKEN_TRIGGERS: EffectTrigger[] = ['on_destroy', 'on_attack', 'on_damaged'];
+
+// IMPLEMENTED ACTIONS (working in-game)
+const IMPLEMENTED_ACTIONS: EffectAction[] = ['damage', 'heal', 'draw', 'buff_attack', 'buff_health', 'destroy', 'summon', 'silence', 'return_hand', 'stun'];
+
+// BROKEN ACTIONS (not implemented in game engine)
+const BROKEN_ACTIONS: EffectAction[] = ['copy'];
+
+// BROKEN TARGETS (not implemented in game engine)
+const BROKEN_TARGETS: EffectTarget[] = ['random_enemy', 'random_friendly'];
+
+// All options for display (but we'll show warnings for broken ones)
 const TRIGGERS: EffectTrigger[] = ['on_play', 'on_destroy', 'on_attack', 'on_damaged', 'end_of_turn', 'start_of_turn'];
 const TARGETS: EffectTarget[] = ['self', 'friendly_unit', 'enemy_unit', 'any_unit', 'friendly_player', 'enemy_player', 'all_friendly', 'all_enemies', 'all_units', 'random_enemy', 'random_friendly'];
 const ACTIONS: EffectAction[] = ['damage', 'heal', 'draw', 'buff_attack', 'buff_health', 'destroy', 'summon', 'silence', 'return_hand', 'copy', 'stun'];
 const TOKEN_TRIGGERS: TokenTrigger[] = ['on_play', 'on_destroy', 'on_attack', 'on_damaged'];
+
+// Effect validation functions
+function isTriggerImplemented(trigger: EffectTrigger): boolean {
+  return IMPLEMENTED_TRIGGERS.includes(trigger);
+}
+
+function isActionImplemented(action: EffectAction): boolean {
+  return IMPLEMENTED_ACTIONS.includes(action);
+}
+
+function isTargetImplemented(target: EffectTarget): boolean {
+  return !BROKEN_TARGETS.includes(target);
+}
+
+function isEffectCombinationValid(trigger: EffectTrigger, action: EffectAction, target: EffectTarget): boolean {
+  // Check if trigger is implemented
+  if (!isTriggerImplemented(trigger)) return false;
+
+  // Check if action is implemented
+  if (!isActionImplemented(action)) return false;
+
+  // Check if target is implemented
+  if (!isTargetImplemented(target)) return false;
+
+  // Special validation for draw action (doesn't need targets)
+  if (action === 'draw' && target !== 'self') {
+    // Draw only works with 'self' target (or no target), but we allow it for compatibility
+    return true;
+  }
+
+  return true;
+}
+
+function getEffectCompatibilityMessage(trigger: EffectTrigger, action: EffectAction, target: EffectTarget): string | null {
+  if (!isTriggerImplemented(trigger)) {
+    return `❌ Trigger "${TRIGGER_INFO[trigger].name}" is not implemented in-game`;
+  }
+
+  if (!isActionImplemented(action)) {
+    return `❌ Action "${ACTION_INFO[action].name}" is not implemented in-game`;
+  }
+
+  if (!isTargetImplemented(target)) {
+    return `❌ Target "${TARGET_INFO[target].name}" is not implemented in-game`;
+  }
+
+  if (action === 'draw' && target !== 'self') {
+    return `⚠️ Draw action doesn't use targets (will draw for the card owner regardless)`;
+  }
+
+  return null;
+}
+
+// Get available actions for a selected trigger
+function getAvailableActionsForTrigger(trigger: EffectTrigger): EffectAction[] {
+  if (!isTriggerImplemented(trigger)) {
+    return []; // No actions work with broken triggers
+  }
+  return IMPLEMENTED_ACTIONS; // All implemented actions work with working triggers
+}
+
+// Get available targets for a selected trigger and action
+function getAvailableTargetsForTriggerAndAction(trigger: EffectTrigger, action: EffectAction): EffectTarget[] {
+  if (!isTriggerImplemented(trigger) || !isActionImplemented(action)) {
+    return []; // No targets work with broken combinations
+  }
+
+  // For draw action, only 'self' makes sense (though it doesn't really use targets)
+  if (action === 'draw') {
+    return ['self'];
+  }
+
+  // For unit-only actions, only show unit targets
+  const unitOnlyActions: EffectAction[] = ['buff_attack', 'buff_health', 'destroy', 'silence', 'return_hand', 'stun'];
+  if (unitOnlyActions.includes(action)) {
+    return ['self', 'friendly_unit', 'enemy_unit', 'any_unit', 'all_friendly', 'all_enemies', 'all_units'];
+  }
+
+  // For summon action, typically self (the unit summoning)
+  if (action === 'summon') {
+    return ['self'];
+  }
+
+  // For damage/heal, allow both units and players
+  if (action === 'damage' || action === 'heal') {
+    return ['self', 'friendly_unit', 'enemy_unit', 'any_unit', 'friendly_player', 'enemy_player', 'all_friendly', 'all_enemies', 'all_units'];
+  }
+
+  // Default: all implemented targets
+  return TARGETS.filter(target => isTargetImplemented(target));
+}
 
 const RARITY_COLORS: Record<CardRarity, string> = {
   common: '#6b7280',
@@ -124,6 +231,7 @@ export default function CardEditPage() {
     action: 'damage',
     value: 1,
   });
+  const [showGuideModal, setShowGuideModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -420,6 +528,27 @@ export default function CardEditPage() {
   };
 
   const addEffect = () => {
+    // Ensure all components are selected
+    if (!currentEffect.trigger || !currentEffect.action || !currentEffect.target) {
+      Alert.alert(
+        'Incomplete Effect',
+        'Please select all three components: When?, Do what?, and To whom?',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Validate effect combination
+    if (!isEffectCombinationValid(currentEffect.trigger, currentEffect.action, currentEffect.target)) {
+      Alert.alert(
+        'Invalid Effect Combination',
+        getEffectCompatibilityMessage(currentEffect.trigger, currentEffect.action, currentEffect.target) ||
+        'This effect combination is not supported in-game.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       effects: [...prev.effects, currentEffect],
@@ -541,7 +670,12 @@ export default function CardEditPage() {
           <Text style={styles.backText}>← Back to Library</Text>
         </Pressable>
 
-        <Text style={styles.pageTitle}>Edit Card Design</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.pageTitle}>Edit Card Design</Text>
+          <Pressable style={styles.guideButton} onPress={() => setShowGuideModal(true)}>
+            <Text style={styles.guideButtonText}>📚 Effects Guide</Text>
+          </Pressable>
+        </View>
 
         {/* Category Toggle */}
         <Text style={styles.sectionTitle}>Card Category</Text>
@@ -745,6 +879,11 @@ export default function CardEditPage() {
                 <Text style={styles.effectDetail}>
                   {ACTION_INFO[effect.action].icon} {ACTION_INFO[effect.action].name} ({effect.value}) → {TARGET_INFO[effect.target].name}
                 </Text>
+                {getEffectCompatibilityMessage(effect.trigger, effect.action, effect.target) && (
+                  <Text style={styles.effectWarning}>
+                    {getEffectCompatibilityMessage(effect.trigger, effect.action, effect.target)}
+                  </Text>
+                )}
               </View>
               <IconButton icon="close" size={20} onPress={() => removeEffect(index)} />
             </Card.Content>
@@ -755,51 +894,98 @@ export default function CardEditPage() {
           <Card style={styles.effectBuilderCard} mode="outlined">
             <Card.Content>
               <Text style={styles.effectBuilderTitle}>Add Effect</Text>
-              
-              <Text style={styles.effectLabel}>When?</Text>
+
+              {/* Step indicator */}
+              <View style={styles.stepIndicator}>
+                <Text style={[
+                  styles.stepNumber,
+                  styles.stepActive
+                ]}>1</Text>
+                <Text style={styles.stepArrow}>→</Text>
+                <Text style={[
+                  styles.stepNumber,
+                  currentEffect.trigger ? styles.stepActive : styles.stepInactive
+                ]}>2</Text>
+                <Text style={styles.stepArrow}>→</Text>
+                <Text style={[
+                  styles.stepNumber,
+                  currentEffect.trigger && currentEffect.action ? styles.stepActive : styles.stepInactive
+                ]}>3</Text>
+              </View>
+
+              <Text style={styles.effectLabel}>1. When?</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {TRIGGERS.map((trigger) => (
                   <Chip
                     key={trigger}
                     selected={currentEffect.trigger === trigger}
-                    onPress={() => setCurrentEffect({ ...currentEffect, trigger })}
-                    style={styles.effectChip}
+                    onPress={() => {
+                      const newEffect = { ...currentEffect, trigger };
+                      // Reset action and target when trigger changes
+                      if (currentEffect.trigger !== trigger) {
+                        newEffect.action = 'damage' as EffectAction; // Default
+                        newEffect.target = 'enemy_unit' as EffectTarget; // Default
+                      }
+                      setCurrentEffect(newEffect);
+                    }}
+                    style={[
+                      styles.effectChip,
+                      !isTriggerImplemented(trigger) && styles.effectChipBroken
+                    ]}
                     compact
                   >
                     {TRIGGER_INFO[trigger].icon} {TRIGGER_INFO[trigger].name}
+                    {!isTriggerImplemented(trigger) && ' ❌'}
                   </Chip>
                 ))}
               </ScrollView>
 
-              <Text style={styles.effectLabel}>Do what?</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {ACTIONS.map((action) => (
-                  <Chip
-                    key={action}
-                    selected={currentEffect.action === action}
-                    onPress={() => setCurrentEffect({ ...currentEffect, action })}
-                    style={styles.effectChip}
-                    compact
-                  >
-                    {ACTION_INFO[action].icon} {ACTION_INFO[action].name}
-                  </Chip>
-                ))}
-              </ScrollView>
+              {/* Step 2: Do what? (only show if trigger selected) */}
+              {currentEffect.trigger && (
+                <>
+                  <Text style={styles.effectLabel}>2. Do what?</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {getAvailableActionsForTrigger(currentEffect.trigger).map((action) => (
+                      <Chip
+                        key={action}
+                        selected={currentEffect.action === action}
+                        onPress={() => {
+                          const newEffect = { ...currentEffect, action };
+                          // Reset target when action changes
+                          if (currentEffect.action !== action) {
+                            newEffect.target = 'enemy_unit' as EffectTarget; // Default
+                          }
+                          setCurrentEffect(newEffect);
+                        }}
+                        style={styles.effectChip}
+                        compact
+                      >
+                        {ACTION_INFO[action].icon} {ACTION_INFO[action].name}
+                      </Chip>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
 
-              <Text style={styles.effectLabel}>To whom?</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {TARGETS.map((target) => (
-                  <Chip
-                    key={target}
-                    selected={currentEffect.target === target}
-                    onPress={() => setCurrentEffect({ ...currentEffect, target })}
-                    style={styles.effectChip}
-                    compact
-                  >
-                    {TARGET_INFO[target].name}
-                  </Chip>
-                ))}
-              </ScrollView>
+              {/* Step 3: To whom? (only show if trigger and action selected) */}
+              {currentEffect.trigger && currentEffect.action && (
+                <>
+                  <Text style={styles.effectLabel}>3. To whom?</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {getAvailableTargetsForTriggerAndAction(currentEffect.trigger, currentEffect.action).map((target) => (
+                      <Chip
+                        key={target}
+                        selected={currentEffect.target === target}
+                        onPress={() => setCurrentEffect({ ...currentEffect, target })}
+                        style={styles.effectChip}
+                        compact
+                      >
+                        {TARGET_INFO[target].icon} {TARGET_INFO[target].name}
+                      </Chip>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
 
               <Text style={styles.effectLabel}>Value</Text>
               <View style={styles.valueRow}>
@@ -1070,6 +1256,88 @@ export default function CardEditPage() {
     </ScrollView>
   );
 
+  const renderGuideModal = () => (
+    <Portal>
+      <Modal
+        visible={showGuideModal}
+        onDismiss={() => setShowGuideModal(false)}
+        contentContainerStyle={styles.guideModalContainer}
+      >
+        <ScrollView style={styles.guideModalScroll}>
+          <View style={styles.guideModalContent}>
+            <Text style={styles.guideModalTitle}>🎯 Card Effects Guide</Text>
+
+            <Text style={styles.guideSectionTitle}>⚔️ Combat Effects</Text>
+            <View style={styles.guideSection}>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💥 Damage:</Text> Deals damage to reduce target's health</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💀 Destroy:</Text> Instantly kills the target unit</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>😵 Stun:</Text> Target can't attack next turn</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🤫 Silence:</Text> Removes all effects from target</Text>
+            </View>
+
+            <Text style={styles.guideSectionTitle}>💚 Healing & Buffs</Text>
+            <View style={styles.guideSection}>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💚 Heal:</Text> Restores health to target</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>⚔️ Buff Attack:</Text> Permanently increases attack power</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🛡️ Buff Health:</Text> Permanently increases max health</Text>
+            </View>
+
+            <Text style={styles.guideSectionTitle}>🎴 Card Effects</Text>
+            <View style={styles.guideSection}>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🃏 Draw:</Text> Draw cards from your deck</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🔄 Return Hand:</Text> Send target back to owner's hand</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>📋 Copy:</Text> Copy another card's effects</Text>
+            </View>
+
+            <Text style={styles.guideSectionTitle}>🎭 Summoning</Text>
+            <View style={styles.guideSection}>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🎭 Summon:</Text> Create token units on the board</Text>
+            </View>
+
+            <Text style={styles.guideSectionTitle}>⏰ When Effects Trigger</Text>
+            <View style={styles.guideSection}>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🎴 On Play:</Text> When this card is played from hand</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>⚔️ On Attack:</Text> When this unit attacks</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🎯 On Damaged:</Text> When this unit takes damage</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💀 On Destroy:</Text> When this unit dies</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🌅 Start of Turn:</Text> At the start of your turn</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🌙 End of Turn:</Text> At the end of your turn</Text>
+            </View>
+
+            <Text style={styles.guideSectionTitle}>🎯 Who Effects Target</Text>
+            <View style={styles.guideSection}>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🪞 Self:</Text> This card/unit</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💚 Friendly Unit:</Text> Your units</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💔 Enemy Unit:</Text> Opponent's units</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🎲 Any Unit:</Text> Any unit on board</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>👤 Friendly Player:</Text> Your hero</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>👥 Enemy Player:</Text> Opponent's hero</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💚 All Friendly:</Text> All your units</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>💔 All Enemies:</Text> All opponent units</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🎯 Random Enemy:</Text> Random enemy unit</Text>
+            </View>
+
+            <Text style={styles.guideSectionTitle}>🏷️ Unit Keywords</Text>
+            <View style={styles.guideSection}>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🏰 Frontline:</Text> Can be attacked by enemies</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>⚡ Quick:</Text> Can attack immediately when summoned</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>🌀 Evasion:</Text> 50% chance to avoid attacks</Text>
+              <Text style={styles.guideItem}><Text style={styles.guideItemBold}>⭐ Boost:</Text> Gets stronger each turn alive</Text>
+            </View>
+
+            <Button
+              mode="contained"
+              onPress={() => setShowGuideModal(false)}
+              style={styles.guideCloseButton}
+            >
+              Close Guide
+            </Button>
+          </View>
+        </ScrollView>
+      </Modal>
+    </Portal>
+  );
+
   const renderPreview = () => (
     <ScrollView style={styles.previewContainer} contentContainerStyle={styles.previewScrollContent}>
       <View style={styles.previewHeader}>
@@ -1133,6 +1401,7 @@ export default function CardEditPage() {
             {renderPreview()}
           </View>
         </View>
+        {renderGuideModal()}
       </View>
     );
   }
@@ -1157,6 +1426,7 @@ export default function CardEditPage() {
           Save
         </Button>
       </View>
+      {renderGuideModal()}
     </View>
   );
 }
@@ -1203,11 +1473,32 @@ const styles = StyleSheet.create({
     color: adminColors.accent,
     fontSize: 14,
   },
+  guideButton: {
+    paddingHorizontal: adminSpacing.lg,
+    paddingVertical: adminSpacing.md,
+    backgroundColor: '#3b82f6',
+    borderRadius: adminRadius.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  guideButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: adminSpacing.xl,
+  },
   pageTitle: {
     fontSize: 28,
     fontWeight: '700',
     color: adminColors.textPrimary,
-    marginBottom: adminSpacing.xl,
   },
   sectionTitle: {
     fontSize: 14,
@@ -1417,6 +1708,43 @@ const styles = StyleSheet.create({
   effectDetail: {
     fontSize: 13,
     color: adminColors.textPrimary,
+  },
+  effectWarning: {
+    fontSize: 11,
+    color: '#ef4444',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  effectChipBroken: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#ef4444',
+  },
+  stepIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: adminSpacing.md,
+    paddingVertical: adminSpacing.sm,
+  },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  stepActive: {
+    backgroundColor: adminColors.accent,
+  },
+  stepInactive: {
+    backgroundColor: adminColors.textSecondary,
+  },
+  stepArrow: {
+    fontSize: 12,
+    color: adminColors.textSecondary,
+    marginHorizontal: adminSpacing.xs,
   },
   effectBuilderCard: {
     borderColor: adminColors.accent,
@@ -1694,6 +2022,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
     borderTopWidth: 1,
     borderTopColor: adminColors.border,
+  },
+
+  // Guide Modal Styles
+  guideModalContainer: {
+    margin: adminSpacing.lg,
+    backgroundColor: adminColors.surface,
+    borderRadius: adminRadius.lg,
+    maxHeight: '80%',
+    elevation: 5,
+  },
+  guideModalScroll: {
+    maxHeight: '80%',
+  },
+  guideModalContent: {
+    padding: adminSpacing.xl,
+  },
+  guideModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: adminColors.textPrimary,
+    textAlign: 'center',
+    marginBottom: adminSpacing.sm,
+  },
+  guideModalSubtitle: {
+    fontSize: 14,
+    color: adminColors.textSecondary,
+    textAlign: 'center',
+    marginBottom: adminSpacing.xl,
+  },
+  guideSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: adminColors.accent,
+    marginTop: adminSpacing.lg,
+    marginBottom: adminSpacing.md,
+  },
+  guideSection: {
+    backgroundColor: adminColors.background,
+    borderRadius: adminRadius.md,
+    padding: adminSpacing.md,
+    marginBottom: adminSpacing.md,
+  },
+  guideItem: {
+    fontSize: 13,
+    color: adminColors.textPrimary,
+    marginBottom: adminSpacing.sm,
+    lineHeight: 18,
+  },
+  guideItemBold: {
+    fontWeight: '600',
+    color: adminColors.accent,
+  },
+  guideCloseButton: {
+    marginTop: adminSpacing.xl,
+    backgroundColor: adminColors.accent,
   },
 });
 

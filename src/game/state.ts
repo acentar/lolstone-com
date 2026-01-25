@@ -314,11 +314,12 @@ export function queueOnPlayEffects(state: GameState, unit: UnitInPlay, playerId:
  */
 function queueActionEffects(state: GameState, card: CardInHand, playerId: string, targetId?: string): void {
   const effects = card.design.effects.filter(e => e.trigger === 'on_play');
-  
+
   for (const effect of effects) {
     state.pendingEffects.push({
       id: uuidv4(),
       sourceUnitId: null,
+      sourceCard: card, // Pass the card for summon effects
       sourcePlayerId: playerId,
       effect,
       targetIds: targetId ? [targetId] : [],

@@ -212,13 +212,11 @@ export default function PlayerHomeScreen() {
   }
 
   return (
-    <LinearGradient
-      colors={['#0f172a', '#1e293b', '#0f172a']}
-      style={styles.container}
-    >
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
+    <View style={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.contentWrapper}>
+          {/* Header */}
+          <View style={styles.header}>
           <View style={styles.greeting}>
             <Text style={styles.welcomeText}>Welcome back,</Text>
             <Text style={styles.playerName}>{player?.name || 'Player'}</Text>
@@ -410,6 +408,7 @@ export default function PlayerHomeScreen() {
           <Text style={styles.emptyText}>No recent games</Text>
           <Text style={styles.emptySubtext}>Start playing to see your history!</Text>
         </View>
+        </View>
       </ScrollView>
 
       {/* Deck Selection Modal */}
@@ -469,13 +468,24 @@ export default function PlayerHomeScreen() {
           </View>
         </Pressable>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+    paddingTop: 82,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  contentWrapper: {
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
   },
   scroll: {
     flex: 1,
@@ -484,8 +494,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.lg,
   },
   greeting: {},

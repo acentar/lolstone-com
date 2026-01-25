@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { Deck } from '../../src/types/database';
-import { spacing } from '../../src/constants/theme';
+import { spacing, colors } from '../../src/constants/theme';
 
 interface DeckWithCardCount extends Deck {
   card_count: number;
@@ -109,15 +109,14 @@ export default function DecksScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#0f172a', '#1e293b', '#0f172a']}
-      style={styles.container}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>My Decks</Text>
-        <Text style={styles.subtitle}>Build your battle strategy</Text>
-      </View>
+    <View style={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.contentWrapper}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>My Decks</Text>
+            <Text style={styles.subtitle}>Build your battle strategy</Text>
+          </View>
 
       {/* Decks List */}
       {loading ? (
@@ -190,6 +189,8 @@ export default function DecksScreen() {
           ))}
         </ScrollView>
       )}
+        </View>
+      </ScrollView>
 
       {/* FAB for new deck */}
       {decks.length > 0 && (
@@ -200,17 +201,30 @@ export default function DecksScreen() {
           color="#fff"
         />
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000000',
+    paddingTop: 82,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  contentWrapper: {
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
   },
   header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
   title: {

@@ -21,8 +21,8 @@ const RECEIVER_WALLET = '8XnSN4Jix5TDmybFix3f3ircvKK96FJGXiU4PEojubA4';
 // USDC Mint on Solana Mainnet
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Ducat rate: 1 ducat = 0.01 USD
-const DUCAT_USD_RATE = 0.01;
+// Ducat rate: 1 ducat = 0.10 USD (100 ducats = $10)
+const DUCAT_USD_RATE = 0.10;
 const USDC_DECIMALS = 6;
 
 // Create Supabase client with service role for elevated permissions
@@ -124,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const postSol = tx.meta.postBalances[receiverIndex];
         const solDiff = (postSol - preSol) / 1e9; // Convert lamports to SOL
 
-        // If we received any SOL, verify it's reasonable (at least $0.50 worth per 100 ducats)
+        // If we received any SOL, verify it's reasonable (at least $5 worth per 100 ducats)
         if (solDiff > 0) {
           transferVerified = true;
           transferredAmount = solDiff;

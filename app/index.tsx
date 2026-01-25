@@ -1,22 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions, Modal, Image, Animated, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions, Modal, Image, ActivityIndicator, RefreshControl, useWindowDimensions, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Card, Button, Chip, IconButton } from 'react-native-paper';
+import { Card, Button, Chip, IconButton, Avatar } from 'react-native-paper';
+import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing, interpolate } from 'react-native-reanimated';
 import { colors, spacing, typography } from '../src/constants/theme';
 import CardPreview from '../src/components/CardPreview';
 import CardDetailModal from '../src/components/CardDetailModal';
 import { CardDesign, CardDesignFull } from '../src/types/database';
 import { supabase } from '../src/lib/supabase';
+import { useAuthContext } from '../src/context/AuthContext';
+import HeaderNavigation from '../src/components/HeaderNavigation';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LandingPage() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 900;
+  const { player } = useAuthContext();
 
-  // Live stats state
-  const [onlinePlayers, setOnlinePlayers] = useState(1247);
-  const [activeGames, setActiveGames] = useState(89);
+  // Fake stats for top navigation
+  const [onlinePlayers, setOnlinePlayers] = useState(24);
+  const [activeGames, setActiveGames] = useState(6);
 
   // Recently minted cards state
   const [recentlyMintedCards, setRecentlyMintedCards] = useState<CardDesignFull[]>([]);
@@ -25,17 +31,36 @@ export default function LandingPage() {
   const [selectedCard, setSelectedCard] = useState<CardDesign | null>(null);
   const [cardModalVisible, setCardModalVisible] = useState(false);
 
-  // Game info modals and accordions
-  const [exampleCardsModal, setExampleCardsModal] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
-    howItWorks: false,
-    cardsCollecting: false,
-    whyPlay: false,
-  });
+  // Format number helper
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toLocaleString();
+  };
 
-  // Animation refs for pulse dots
-  const playersPulseAnim = useRef(new Animated.Value(1)).current;
-  const gamesPulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Logo animation values
+  const funnyOAnimation = useSharedValue(0);
+
+  // Animated styles for funny O
+  const funnyOAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: interpolate(funnyOAnimation.value, [0, 1], [1, 1.05]) },
+      { rotate: `${interpolate(funnyOAnimation.value, [0, 1], [0, 5])}deg` },
+    ],
+  }));
+
+  // Start logo animations
+  useEffect(() => {
+    funnyOAnimation.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, []);
 
   // Fetch recently minted cards (unique designs by most recent mint)
   const fetchRecentlyMintedCards = async () => {
@@ -117,29 +142,6 @@ export default function LandingPage() {
     }
   };
 
-  // Start pulse animations
-  useEffect(() => {
-    const startPulseAnimation = (anim: Animated.Value) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim, {
-            toValue: 1.5,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    };
-
-    startPulseAnimation(playersPulseAnim);
-    startPulseAnimation(gamesPulseAnim);
-  }, []);
-
   // Fetch recently minted cards on mount
   useEffect(() => {
     fetchRecentlyMintedCards();
@@ -148,16 +150,16 @@ export default function LandingPage() {
   // Update live stats every 5 seconds with fake data
   useEffect(() => {
     const interval = setInterval(() => {
-      // Random fluctuation between -5 and +5 players
+      // Random fluctuation between -2 and +2 players
       setOnlinePlayers(prev => {
-        const change = Math.floor(Math.random() * 11) - 5; // -5 to +5
-        return Math.max(1000, Math.min(2000, prev + change));
+        const change = Math.floor(Math.random() * 5) - 2; // -2 to +2
+        return Math.max(9, Math.min(36, prev + change));
       });
 
-      // Random fluctuation between -2 and +2 games
+      // Random fluctuation between -1 and +1 games
       setActiveGames(prev => {
-        const change = Math.floor(Math.random() * 5) - 2; // -2 to +2
-        return Math.max(50, Math.min(150, prev + change));
+        const change = Math.floor(Math.random() * 3) - 1; // -1 to +1
+        return Math.max(3, Math.min(9, prev + change));
       });
     }, 5000); // Update every 5 seconds
 
@@ -178,104 +180,124 @@ export default function LandingPage() {
     setSelectedCard(null);
   };
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Hero Section */}
-      <LinearGradient
-        colors={['#0f172a', '#1e293b', '#0f172a']}
-        style={styles.heroSection}
-      >
-        {/* Background Elements */}
-        <View style={styles.glowOrb1} />
-        <View style={styles.glowOrb2} />
-        <View style={styles.gridOverlay} />
+    <View style={styles.container}>
+      {/* Top Header with Live Stats */}
+      <View style={styles.topHeader}>
+        <View style={styles.headerBlur}>
+          <View style={styles.headerContent}>
+            <HeaderNavigation />
+            
+            <View style={styles.statsRow}>
+              <View style={styles.statTag}>
+                <Text style={styles.statTagText}>
+                  <Text style={styles.statTagNumber}>{onlinePlayers.toLocaleString()}</Text>
+                  <Text> Online</Text>
+                </Text>
+              </View>
+              <View style={styles.statTag}>
+                <Text style={styles.statTagText}>
+                  <Text style={[styles.statTagNumber, { color: '#10b981' }]}>
+                    {activeGames.toLocaleString()}
+                  </Text>
+                  <Text> Active Games</Text>
+                </Text>
+              </View>
+            </View>
 
-        <View style={styles.heroContent}>
-          <Text style={styles.emoji}>🃏</Text>
-          <Text style={styles.title}>LOLSTONE</Text>
-          <Text style={styles.tagline}>The Ultimate Digital Card Game</Text>
-          <Text style={styles.description}>
-            Collect powerful cards, build unstoppable decks, and battle players
-            in chaotic, meme-filled matches. Where strategy meets absurdity.
-          </Text>
-
-          {/* CTA Button */}
-          <View style={styles.ctaContainer}>
-            <Pressable style={styles.primaryButton} onPress={handlePlayerPortal}>
-              <Text style={styles.primaryButtonText}>🎮 Play Now</Text>
-            </Pressable>
+            {player ? (
+              <Pressable style={styles.avatarButton} onPress={() => router.push('/player/profile')}>
+                {player.avatar_url ? (
+                  <Avatar.Image size={36} source={{ uri: player.avatar_url }} />
+                ) : (
+                  <Avatar.Text
+                    size={36}
+                    label={player.name?.charAt(0).toUpperCase() || '?'}
+                    style={styles.avatar}
+                    labelStyle={styles.avatarLabel}
+                  />
+                )}
+              </Pressable>
+            ) : (
+              <Pressable style={styles.playButton} onPress={handlePlayerPortal}>
+                <Text style={styles.playButtonText}>Play Now</Text>
+              </Pressable>
+            )}
           </View>
         </View>
-      </LinearGradient>
-
-      {/* Live Stats Section */}
-      <View style={styles.liveStatsSection}>
-        <Text style={styles.sectionTitle}>🌐 Live Stats</Text>
-        <Text style={styles.statsSubtitle}>Real-time player activity across the globe</Text>
-
-        <LinearGradient
-          colors={[colors.surface, colors.background]}
-          style={styles.statsGradientContainer}
-        >
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <LinearGradient
-                colors={[colors.primary + '15', colors.primary + '05']}
-                style={styles.statCardGradient}
-              >
-                <View style={styles.statIconContainer}>
-                  <Text style={styles.statIcon}>👥</Text>
-                </View>
-                <Text style={styles.statValue}>{onlinePlayers.toLocaleString()}</Text>
-                <Text style={styles.statLabel}>Players Online</Text>
-                <Text style={styles.statSubLabel}>Active right now</Text>
-                <Animated.View
-                  style={[
-                    styles.pulseDot,
-                    { backgroundColor: colors.primary, transform: [{ scale: playersPulseAnim }] }
-                  ]}
-                />
-              </LinearGradient>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-              <LinearGradient
-                colors={[colors.secondary + '15', colors.secondary + '05']}
-                style={styles.statCardGradient}
-              >
-                <View style={styles.statIconContainer}>
-                  <Text style={styles.statIcon}>⚔️</Text>
-                </View>
-                <Text style={styles.statValue}>{activeGames.toLocaleString()}</Text>
-                <Text style={styles.statLabel}>Active Games</Text>
-                <Text style={styles.statSubLabel}>Battles raging</Text>
-                <Animated.View
-                  style={[
-                    styles.pulseDot,
-                    { backgroundColor: colors.secondary, transform: [{ scale: gamesPulseAnim }] }
-                  ]}
-                />
-              </LinearGradient>
-            </View>
-          </View>
-        </LinearGradient>
-
-        <Text style={styles.statsUpdateNote}>📊 Stats update every few seconds</Text>
       </View>
 
-      {/* Recently Minted Cards Section */}
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          {/* Video Background */}
+          <View style={styles.videoContainer}>
+            {/* @ts-ignore - Web video element */}
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                zIndex: 0,
+              }}
+            >
+              <source
+                src="https://taovuehsewbomdptruln.supabase.co/storage/v1/object/public/avatars/43e8aed6562d417f83830aae18fb8188.mp4"
+                type="video/mp4"
+              />
+            </video>
+            {/* Dark Overlay */}
+            <View style={styles.videoOverlay} />
+          </View>
+          <View style={styles.heroContent}>
+            {/* Stacked Logo */}
+            <View style={styles.stackedLogoContainer}>
+              <View style={styles.logoTopContainer}>
+                <Text style={styles.logoTop}>L</Text>
+                <Animated.View style={[styles.funnyOContainer, funnyOAnimatedStyle]}>
+                  <View style={styles.funnyO}>
+                    <View style={styles.funnyOInner}>
+                      <View style={styles.funnyOLeftEye} />
+                      <View style={styles.funnyORightEye} />
+                      <View style={styles.funnyOMouth} />
+                    </View>
+                  </View>
+                </Animated.View>
+                <Text style={styles.logoTop}>L</Text>
+              </View>
+              <Text style={styles.logoBottom}>STONE</Text>
+            </View>
+            <Text style={styles.tagline}>The Ultimate Digital Card Game</Text>
+            <Text style={styles.description}>
+              Collect powerful cards, build unstoppable decks, and battle players
+              in chaotic, meme-filled matches. Where strategy meets absurdity.
+            </Text>
+
+            {/* CTA Button */}
+            <View style={styles.ctaContainer}>
+              <Pressable style={styles.primaryButton} onPress={handlePlayerPortal}>
+                <Text style={styles.primaryButtonText}>Start Playing</Text>
+              </Pressable>
+            </View>
+            
+            {/* Beta Release Info */}
+            <Text style={styles.betaReleaseText}>
+              New beta release 23rd January
+            </Text>
+          </View>
+        </View>
+
+      {/* Available Cards Section */}
       <View style={styles.recentCardsSection}>
-        <Text style={styles.sectionTitle}>🔥 Available Cards</Text>
-        <Text style={styles.sectionSubtitle}>Cards that have been minted • Pull to refresh</Text>
+        <Text style={styles.sectionTitle}>Recently minted cards</Text>
 
         {loadingCards ? (
           <View style={styles.loadingContainer}>
@@ -284,7 +306,6 @@ export default function LandingPage() {
           </View>
         ) : recentlyMintedCards.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🎨</Text>
             <Text style={styles.emptyTitle}>No Cards Available</Text>
             <Text style={styles.emptyText}>Cards will appear here once they're created and minted!</Text>
           </View>
@@ -332,397 +353,61 @@ export default function LandingPage() {
         )}
       </View>
 
-      {/* Game Information Sections */}
-      <View style={styles.gameInfoSection}>
-        <Text style={styles.sectionTitle}>🎮 How to Play Lolstone</Text>
-
-        {/* How It Works Accordion */}
-        <View style={styles.accordionContainer}>
-          <Pressable style={styles.accordionHeader} onPress={() => toggleSection('howItWorks')}>
-            <Text style={styles.accordionTitle}>🎯 How the Game Works</Text>
-            <IconButton
-              icon={expandedSections.howItWorks ? "chevron-up" : "chevron-down"}
-              size={24}
-              iconColor={colors.primary}
-            />
+      {/* News Section */}
+      <View style={styles.newsSection}>
+        <Text style={styles.sectionTitle}>News</Text>
+        
+        <View style={styles.newsGrid}>
+          <Pressable 
+            style={styles.newsCard}
+            onPress={() => router.push('/news/how-the-game-works')}
+          >
+            <View style={styles.newsCardContent}>
+              <Text style={styles.newsCardTitle}>How the Game Works</Text>
+              <Text style={styles.newsCardDescription}>
+                Learn the core mechanics, strategies, and gameplay of Lolstone. Master the art of meme-based card battles.
+              </Text>
+              <Text style={styles.newsCardLink}>Read more →</Text>
+            </View>
           </Pressable>
-          {expandedSections.howItWorks && (
-            <View style={styles.accordionContent}>
-              <Text style={styles.gameDescription}>
-                Lolstone is the ultimate turn-based card game built entirely around internet culture. Think strategic duels like classic card battlers, but instead of wizards and dragons, your deck is packed with memes, viral roasts, trolls, reactions, and chaotic online moments that everyone recognises.
-              </Text>
-              <Text style={styles.gameDescription}>
-                You and an opponent face off on the board. Each player starts with 30 health. Your goal is simple: reduce your opponent's health to zero before they do the same to you. Matches are quick, intense, and full of laugh-out-loud swings.
-              </Text>
 
-              <View style={styles.gameRules}>
-                <Text style={styles.ruleTitle}>🎲 Core Mechanics:</Text>
-                <Text style={styles.ruleItem}>• Build a deck of exactly 30 cards from your collection</Text>
-                <Text style={styles.ruleItem}>• Take turns playing units onto the board (up to 7 per side)</Text>
-                <Text style={styles.ruleItem}>• Manage bandwidth crystals (your mana) that refill each turn, ramping from 1 to 10</Text>
-                <Text style={styles.ruleItem}>• Attack with ready units—damage is simultaneous, so trades feel fair and brutal</Text>
-                <Text style={styles.ruleItem}>• Win by outplaying your opponent with clever combos, timely roasts, and meme timing</Text>
-              </View>
-
-              <View style={styles.boardLayout}>
-                <Text style={styles.boardTitle}>📋 Board Layout:</Text>
-                <Text style={styles.boardItem}>• Your profile (avatar + health bar) on the bottom left</Text>
-                <Text style={styles.boardItem}>• Your units across the centre bottom (up to 7)</Text>
-                <Text style={styles.boardItem}>• Hand at the bottom, deck bottom-left, bandwidth top-right</Text>
-                <Text style={styles.boardItem}>• Opponent mirrored at the top</Text>
-              </View>
+          <Pressable 
+            style={styles.newsCard}
+            onPress={() => router.push('/news/lolstone-token')}
+          >
+            <View style={styles.newsCardContent}>
+              <Text style={styles.newsCardTitle}>$lolstone Token</Text>
+              <Text style={styles.newsCardDescription}>
+                Discover the native cryptocurrency powering the Lolstone ecosystem. Learn about tokenomics, rewards, and earning opportunities.
+              </Text>
+              <Text style={styles.newsCardLink}>Read more →</Text>
             </View>
-          )}
-        </View>
-
-        {/* Cards & Collecting Accordion */}
-        <View style={styles.accordionContainer}>
-          <Pressable style={styles.accordionHeader} onPress={() => toggleSection('cardsCollecting')}>
-            <Text style={styles.accordionTitle}>🃏 Cards & Collecting</Text>
-            <IconButton
-              icon={expandedSections.cardsCollecting ? "chevron-up" : "chevron-down"}
-              size={24}
-              iconColor={colors.primary}
-            />
           </Pressable>
-          {expandedSections.cardsCollecting && (
-            <View style={styles.accordionContent}>
-              <Text style={styles.gameDescription}>
-                Every card is a unique digital collectible based on real internet memes. Each instance you own has its own serial number and edition (e.g., #42 of First Edition). Cards come in four rarities: common, rare, epic, and legendary.
-              </Text>
-
-              <Text style={styles.gameDescription}>
-                Only we, the game masters, can create and mint new card designs and batches. This keeps the ecosystem controlled, balanced, and special—no flood of junk cards. When we mint a batch, those copies become permanent and enter the game forever. Some go into reward pools, some are sold, some are airdropped to active players.
-              </Text>
-
-              <View style={styles.collectionOptions}>
-                <Text style={styles.collectionTitle}>🎁 How to Get Cards:</Text>
-                <Text style={styles.collectionItem}>• Earn cards through play rewards and events</Text>
-                <Text style={styles.collectionItem}>• Buy packs with ducats (in-game currency)</Text>
-                <Text style={styles.collectionItem}>• Trade cards on the marketplace to earn real money</Text>
-              </View>
-
-              <View style={styles.exampleCardsSection}>
-                <Pressable style={styles.exampleButton} onPress={() => setExampleCardsModal(true)}>
-                  <Text style={styles.exampleButtonText}>View Example Cards</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Why Play Accordion */}
-        <View style={styles.accordionContainer}>
-          <Pressable style={styles.accordionHeader} onPress={() => toggleSection('whyPlay')}>
-            <Text style={styles.accordionTitle}>🚀 Why Play Lolstone</Text>
-            <IconButton
-              icon={expandedSections.whyPlay ? "chevron-up" : "chevron-down"}
-              size={24}
-              iconColor={colors.primary}
-            />
-          </Pressable>
-          {expandedSections.whyPlay && (
-            <View style={styles.accordionContent}>
-              <View style={styles.benefitsList}>
-                <Text style={styles.benefitItem}>🎁 Free to start: Create an account, claim starter packs, and jump into matches</Text>
-                <Text style={styles.benefitItem}>🏆 Own what you earn: Every card you acquire is truly yours—trade, sell, or hold</Text>
-                <Text style={styles.benefitItem}>🔄 Constant fresh content: We regularly mint new meme-inspired cards and expansions</Text>
-                <Text style={styles.benefitItem}>👥 Community-driven: Join duels, climb ranks, and chat with fellow meme lords</Text>
-              </View>
-
-              <View style={styles.ctaSection}>
-                <Text style={styles.ctaText}>Ready to battle with the internet's greatest hits?</Text>
-                <Text style={styles.ctaSubtext}>Sign up now, grab your starter deck, and start roasting opponents today.</Text>
-                <Pressable style={styles.finalCtaButton} onPress={handlePlayerPortal}>
-                  <Text style={styles.finalCtaButtonText}>🎮 Start Playing Now</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
         </View>
       </View>
 
-      {/* Example Cards Modal */}
-      <Modal
-        visible={exampleCardsModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setExampleCardsModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>💎 Example Cards</Text>
-              <IconButton
-                icon="close"
-                size={24}
-                onPress={() => setExampleCardsModal(false)}
-              />
-            </View>
 
-            <ScrollView style={styles.modalScroll}>
-              <View style={styles.exampleCard}>
-                <Text style={styles.cardName}>🐕 This is Fine Dog</Text>
-                <Text style={styles.cardRarity}>Common Unit</Text>
-                <Text style={styles.cardStats}>Cost: 4 • Attack: 1 • Health: 6</Text>
-                <Text style={styles.cardKeywords}>Keywords: Frontline</Text>
-                <Text style={styles.cardEffect}>Effect: On destroy – Heal your profile for 3 health.</Text>
-                <Text style={styles.cardFlavor}>"Everything is under control."</Text>
-              </View>
 
-              <View style={styles.exampleCard}>
-                <Text style={styles.cardName}>👦 Distracted Boyfriend</Text>
-                <Text style={styles.cardRarity}>Rare Unit</Text>
-                <Text style={styles.cardStats}>Cost: 4 • Attack: 3 • Health: 4</Text>
-                <Text style={styles.cardKeywords}>Keywords: Evasion</Text>
-                <Text style={styles.cardEffect}>Effect: On play – Next enemy attack redirects to a random other enemy target.</Text>
-              </View>
-
-              <View style={styles.exampleCard}>
-                <Text style={styles.cardName}>😈 Trollface</Text>
-                <Text style={styles.cardRarity}>Epic Unit</Text>
-                <Text style={styles.cardStats}>Cost: 5 • Attack: 4 • Health: 3</Text>
-                <Text style={styles.cardEffect}>Effect: On play – Deal 2 damage to a random enemy, then repeat if it destroys a unit.</Text>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* $lolstone Token Section */}
-      <View style={styles.tokenSection}>
-        <LinearGradient
-          colors={[colors.primary + '10', colors.secondary + '05', colors.primary + '10']}
-          style={styles.tokenGradient}
-        >
-          <View style={styles.tokenContent}>
-            <View style={styles.tokenHeader}>
-              <Text style={styles.tokenMainTitle}>🚀 $lolstone Token</Text>
-              <Text style={styles.tokenSubtitle}>The Fuel Powering the Meme Revolution</Text>
-            </View>
-
-            <Text style={styles.tokenDescription}>
-              $lolstone is the native cryptocurrency of Lolstone, fueling the ecosystem where internet memes battle for supremacy. Every holder owns a stake in the game's explosive growth, turning laughs into real rewards.
-            </Text>
-
-            {/* Token Features Grid */}
-            <View style={styles.tokenFeaturesGrid}>
-              <View style={styles.tokenFeature}>
-                <Text style={styles.featureIcon}>🛒</Text>
-                <Text style={styles.featureTitle}>Buy Ducats</Text>
-                <Text style={styles.featureDesc}>Purchase ducats at favorable rates for in-game spending</Text>
-              </View>
-
-              <View style={styles.tokenFeature}>
-                <Text style={styles.featureIcon}>🏦</Text>
-                <Text style={styles.featureTitle}>Staking Rewards</Text>
-                <Text style={styles.featureDesc}>Earn free packs, exclusive memes, and boosted ducats</Text>
-              </View>
-
-              <View style={styles.tokenFeature}>
-                <Text style={styles.featureIcon}>🗳️</Text>
-                <Text style={styles.featureTitle}>Governance</Text>
-                <Text style={styles.featureDesc}>Vote on new card sets, expansions, and community events</Text>
-              </View>
-
-              <View style={styles.tokenFeature}>
-                <Text style={styles.featureIcon}>💰</Text>
-                <Text style={styles.featureTitle}>Passive Income</Text>
-                <Text style={styles.featureDesc}>Earn from marketplace fees as player base grows</Text>
-              </View>
-
-              <View style={styles.tokenFeature}>
-                <Text style={styles.featureIcon}>🔥</Text>
-                <Text style={styles.featureTitle}>Deflationary</Text>
-                <Text style={styles.featureDesc}>Transaction taxes fund burns and liquidity</Text>
-              </View>
-
-              <View style={styles.tokenFeature}>
-                <Text style={styles.featureIcon}>📈</Text>
-                <Text style={styles.featureTitle}>Organic Growth</Text>
-                <Text style={styles.featureDesc}>More players = more duels, trades, and token demand</Text>
-              </View>
-            </View>
-
-            {/* Tokenomics Section */}
-            <View style={styles.tokenomicsContainer}>
-              <Text style={styles.tokenomicsTitle}>💎 Tokenomics</Text>
-              <Text style={styles.tokenomicsSubtitle}>Transparent, Community-First Distribution</Text>
-
-              <View style={styles.tokenStats}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>1B</Text>
-                  <Text style={styles.statLabel}>Total Supply</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>SOL</Text>
-                  <Text style={styles.statLabel}>Blockchain</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>1%</Text>
-                  <Text style={styles.statLabel}>Tax Rate</Text>
-                </View>
-              </View>
-
-              {/* Allocation Table */}
-              <View style={styles.allocationTable}>
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 2 }]}>Category</Text>
-                  <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 1 }]}>Allocation</Text>
-                  <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 1 }]}>Percentage</Text>
-                  <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 3 }]}>Details</Text>
-                </View>
-
-                <View style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>💧 Liquidity Pool</Text>
-                  <Text style={[styles.tableCell, { flex: 1 }]}>500M</Text>
-                  <Text style={[styles.tableCell, { flex: 1, color: colors.primary }]}>50%</Text>
-                  <Text style={[styles.tableCell, { flex: 3, fontSize: 12 }]}>Locked forever on Raydium</Text>
-                </View>
-
-                <View style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>🎁 Ecosystem Rewards</Text>
-                  <Text style={[styles.tableCell, { flex: 1 }]}>200M</Text>
-                  <Text style={[styles.tableCell, { flex: 1, color: colors.secondary }]}>20%</Text>
-                  <Text style={[styles.tableCell, { flex: 3, fontSize: 12 }]}>12-month linear unlock</Text>
-                </View>
-
-                <View style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>👥 Team</Text>
-                  <Text style={[styles.tableCell, { flex: 1 }]}>100M</Text>
-                  <Text style={[styles.tableCell, { flex: 1, color: colors.secondary }]}>10%</Text>
-                  <Text style={[styles.tableCell, { flex: 3, fontSize: 12 }]}>24-month vest, 6-month cliff</Text>
-                </View>
-
-                <View style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>📢 Marketing</Text>
-                  <Text style={[styles.tableCell, { flex: 1 }]}>100M</Text>
-                  <Text style={[styles.tableCell, { flex: 1, color: colors.primary }]}>10%</Text>
-                  <Text style={[styles.tableCell, { flex: 3, fontSize: 12 }]}>6-month unlock</Text>
-                </View>
-
-                <View style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>🔥 Community Burn</Text>
-                  <Text style={[styles.tableCell, { flex: 1 }]}>100M</Text>
-                  <Text style={[styles.tableCell, { flex: 1, color: colors.secondary }]}>10%</Text>
-                  <Text style={[styles.tableCell, { flex: 3, fontSize: 12 }]}>Immediate burn</Text>
-                </View>
-              </View>
-
-              {/* Security Features */}
-              <View style={styles.securityFeatures}>
-                <Text style={styles.securityTitle}>🔒 Security & Trust</Text>
-
-                <View style={styles.securityGrid}>
-                  <View style={styles.securityItem}>
-                    <Text style={styles.securityIcon}>🚀</Text>
-                    <Text style={styles.securityText}>Fair Launch</Text>
-                  </View>
-                  <View style={styles.securityItem}>
-                    <Text style={styles.securityIcon}>🔐</Text>
-                    <Text style={styles.securityText}>Authority Revoked</Text>
-                  </View>
-                  <View style={styles.securityItem}>
-                    <Text style={styles.securityIcon}>✅</Text>
-                    <Text style={styles.securityText}>Full Audit</Text>
-                  </View>
-                  <View style={styles.securityItem}>
-                    <Text style={styles.securityIcon}>🚫</Text>
-                    <Text style={styles.securityText}>No Rugs</Text>
-                  </View>
-                  <View style={styles.securityItem}>
-                    <Text style={styles.securityIcon}>🔥</Text>
-                    <Text style={styles.securityText}>Auto Burn</Text>
-                  </View>
-                  <View style={styles.securityItem}>
-                    <Text style={styles.securityIcon}>👥</Text>
-                    <Text style={styles.securityText}>Community First</Text>
-                  </View>
-                </View>
-              </View>
-
-            </View>
-          </View>
-        </LinearGradient>
-      </View>
-
-      {/* Features Section */}
-      <View style={styles.featuresSection}>
-        <Text style={styles.sectionTitle}>Why Play LOLSTONE?</Text>
-
-        <View style={styles.featuresGrid}>
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>🃏</Text>
-            <Text style={styles.featureTitle}>Collect Cards</Text>
-            <Text style={styles.featureDesc}>
-              Build your collection with unique, meme-inspired cards
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>⚔️</Text>
-            <Text style={styles.featureTitle}>Battle Players</Text>
-            <Text style={styles.featureDesc}>
-              Test your strategy against players worldwide
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>💰</Text>
-            <Text style={styles.featureTitle}>Earn Rewards</Text>
-            <Text style={styles.featureDesc}>
-              Win matches and complete quests for ducats
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>🔥</Text>
-            <Text style={styles.featureTitle}>Pure Chaos</Text>
-            <Text style={styles.featureDesc}>
-              Unpredictable effects and hilarious moments
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* How It Works */}
-      <View style={styles.howItWorksSection}>
-        <Text style={styles.sectionTitle}>How It Works</Text>
-
-        <View style={styles.stepsContainer}>
-          <View style={styles.step}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>1</Text>
-            </View>
-            <Text style={styles.stepTitle}>Create Account</Text>
-            <Text style={styles.stepDesc}>Sign up and get 100 free ducats</Text>
-          </View>
-
-          <View style={styles.step}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>2</Text>
-            </View>
-            <Text style={styles.stepTitle}>Build Your Deck</Text>
-            <Text style={styles.stepDesc}>Collect cards and craft strategies</Text>
-          </View>
-
-          <View style={styles.step}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>3</Text>
-            </View>
-            <Text style={styles.stepTitle}>Battle & Win</Text>
-            <Text style={styles.stepDesc}>Compete in matches and climb rankings</Text>
-          </View>
-        </View>
-      </View>
 
       {/* Footer */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          Built with chaos and memes 🔥
+          Built with chaos and memes
         </Text>
         <Text style={styles.footerSubtext}>
           LOLSTONE - Where strategy meets absurdity
+        </Text>
+        <Pressable 
+          style={styles.twitterLink}
+          onPress={() => Linking.openURL('https://x.com/lolstonedotcom')}
+        >
+          <Text style={styles.twitterLinkText}>Follow us on Twitter</Text>
+        </Pressable>
+        <Text style={styles.versionInfo}>
+          Lolstone v1.1.3 • Last updated today
+        </Text>
+        <Text style={styles.copyright}>
+          © {new Date().getFullYear()} Lolstone. All rights reserved.
         </Text>
       </View>
 
@@ -733,7 +418,8 @@ export default function LandingPage() {
         cardDesign={selectedCard}
         isGameMaster={false}
       />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -741,212 +427,404 @@ export default function LandingPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0a0a0f',
+  },
+  topHeader: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    paddingTop: 0,
+  },
+  headerBlur: {
+    backgroundColor: 'rgba(10, 10, 15, 0.85)',
+    backdropFilter: 'blur(20px)',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginLeft: 'auto',
+    marginRight: spacing.md,
+  },
+  statTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  statTagText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  statTagNumber: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  playButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  playButtonText: {
+    color: '#60a5fa',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  avatarButton: {
+    padding: 2,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: colors.primary + '40',
+  },
+  avatar: {
+    backgroundColor: colors.primary,
+  },
+  avatarLabel: {
+    color: colors.background,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  scrollView: {
+    flex: 1,
   },
 
   // Hero Section
   heroSection: {
-    minHeight: height * 0.9,
+    minHeight: '100vh',
+    height: '100vh',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingTop: 100,
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
   },
-  glowOrb1: {
+  videoContainer: {
     position: 'absolute',
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: colors.primary,
-    top: -200,
-    right: -150,
-    opacity: 0.06,
-  },
-  glowOrb2: {
-    position: 'absolute',
-    width: 350,
-    height: 350,
-    borderRadius: 175,
-    backgroundColor: colors.secondary,
-    bottom: -150,
-    left: -100,
-    opacity: 0.06,
-  },
-  gridOverlay: {
-    position: 'absolute',
-    top: 0,
+    top: 82,
     left: 0,
     right: 0,
     bottom: 0,
-    opacity: 0.02,
-    // Grid pattern would be an image in production
+    width: '100%',
+    height: 'calc(100vh - 82px)',
+    zIndex: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 1,
   },
   heroContent: {
     alignItems: 'center',
-    zIndex: 1,
+    zIndex: 10,
+    position: 'relative',
   },
-  emoji: {
-    fontSize: 100,
-    marginBottom: spacing.lg,
+  stackedLogoContainer: {
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: spacing.md,
   },
-  title: {
-    fontSize: Math.min(width * 0.12, 60),
-    fontWeight: '800',
-    color: colors.primary,
+  logoTopContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  logoTop: {
+    fontSize: 56,
+    fontWeight: '900',
     letterSpacing: 6,
-    textShadowColor: colors.primaryGlow,
+    color: '#00f5d4',
+    textShadowColor: 'rgba(0, 245, 212, 0.6)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 20,
-    marginBottom: spacing.sm,
+    zIndex: 1,
+    lineHeight: 62,
+  },
+  funnyOContainer: {
+    width: 60,
+    height: 60,
+    position: 'relative',
+    marginHorizontal: 4,
+  },
+  funnyO: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 5,
+    borderColor: '#00f5d4',
+    backgroundColor: 'rgba(0, 245, 212, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    position: 'relative',
+  },
+  funnyOInner: {
+    width: 45,
+    height: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  funnyOLeftEye: {
+    position: 'absolute',
+    top: 9,
+    left: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00f5d4',
+  },
+  funnyORightEye: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00f5d4',
+  },
+  funnyOMouth: {
+    position: 'absolute',
+    bottom: 9,
+    width: 22,
+    height: 15,
+    borderBottomWidth: 3,
+    borderBottomColor: '#00f5d4',
+    borderBottomLeftRadius: 11,
+    borderBottomRightRadius: 11,
+  },
+  logoBottom: {
+    fontSize: 36,
+    fontWeight: '900',
+    letterSpacing: 4,
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+    zIndex: 1,
+    lineHeight: 38,
+    marginTop: -15,
+    transform: [{ rotate: '-5deg' }],
+  },
+  worksText: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#10b981',
+    marginBottom: 20,
+    textShadowColor: 'rgba(16, 185, 129, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  logoContainer: {
+    position: 'relative',
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: '110%',
+    height: '120%',
+    borderRadius: 30,
+    backgroundColor: '#00f5d4',
+    opacity: 0.15,
+    zIndex: 0,
+  },
+  title: {
+    fontSize: Math.min(width * 0.12, 72),
+    fontWeight: '900',
+    letterSpacing: 10,
+    textAlign: 'center',
+    zIndex: 1,
+    position: 'relative',
+  },
+  titleGradient: {
+    color: '#00f5d4',
+    textShadowColor: 'rgba(0, 245, 212, 0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  titleSolid: {
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   tagline: {
-    fontSize: Math.min(width * 0.06, 24),
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
+    fontSize: Math.min(width * 0.045, 24),
+    color: '#ffffff',
+    marginBottom: spacing.md,
     textAlign: 'center',
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+    letterSpacing: 0.5,
   },
   description: {
-    fontSize: Math.min(width * 0.04, 16),
-    color: colors.textSecondary,
+    fontSize: Math.min(width * 0.032, 16),
+    color: '#e2e8f0',
     textAlign: 'center',
     maxWidth: 600,
     lineHeight: 24,
     marginBottom: spacing.xl,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   ctaContainer: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#3b82f6',
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderRadius: 12,
-    shadowColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: 10,
+    shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
     elevation: 5,
   },
   primaryButtonText: {
-    color: colors.background,
-    fontSize: 18,
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+  },
+  betaReleaseText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    marginTop: spacing.md,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 
-  // Features Section
-  featuresSection: {
+  // News Section
+  newsSection: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xl * 2,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  featuresGrid: {
+  newsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.lg,
     justifyContent: 'center',
+    maxWidth: 1200,
+    alignSelf: 'center',
+    width: '100%',
   },
-  featureCard: {
-    width: Math.min((width - spacing.xl * 2 - spacing.lg * 2) / 2, 250),
-    backgroundColor: colors.background,
+  newsCard: {
+    flex: 1,
+    minWidth: 300,
+    maxWidth: 500,
+    backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: spacing.xl,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
-  featureIcon: {
-    fontSize: 40,
-    marginBottom: spacing.md,
+  newsCardContent: {
+    padding: spacing.xl,
   },
-  featureTitle: {
-    fontSize: 18,
+  newsCardTitle: {
+    fontSize: 24,
     fontWeight: '700',
     color: colors.textPrimary,
     marginBottom: spacing.sm,
-    textAlign: 'center',
+    letterSpacing: -0.5,
   },
-  featureDesc: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-
-  // How It Works
-  howItWorksSection: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl * 2,
-    backgroundColor: colors.background,
-  },
-  stepsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: spacing.xl,
-  },
-  step: {
-    alignItems: 'center',
-    flex: 1,
-    maxWidth: 200,
-  },
-  stepNumber: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  stepNumberText: {
-    color: colors.background,
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  stepTitle: {
+  newsCardDescription: {
     fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-    textAlign: 'center',
-  },
-  stepDesc: {
-    fontSize: 13,
     color: colors.textSecondary,
+    lineHeight: 24,
+    marginBottom: spacing.md,
+  },
+  newsCardLink: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#f1f5f9',
     textAlign: 'center',
-    lineHeight: 18,
+    marginBottom: spacing.lg,
+    letterSpacing: -0.5,
   },
 
   // Footer
   footer: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xl * 2,
-    backgroundColor: colors.surface,
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '400',
+    color: 'rgba(148, 163, 184, 0.3)',
     marginBottom: spacing.xs,
   },
   footerSubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: 'rgba(148, 163, 184, 0.25)',
+    marginBottom: spacing.xs,
+  },
+  twitterLink: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  twitterLinkText: {
+    fontSize: 12,
+    color: '#60a5fa',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  versionInfo: {
+    fontSize: 10,
+    color: 'rgba(148, 163, 184, 0.25)',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  copyright: {
+    fontSize: 9,
+    color: 'rgba(148, 163, 184, 0.2)',
+    marginTop: spacing.xs,
   },
 
   // Live Stats Section
@@ -1052,22 +930,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.xl * 2,
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: spacing.md,
-    opacity: 0.6,
-  },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f1f5f9',
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: '#94a3b8',
     textAlign: 'center',
+    lineHeight: 24,
   },
 
   // Game Info Section

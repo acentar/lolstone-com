@@ -37,6 +37,7 @@ interface UnitOnBoardProps {
   isChargingAttack?: boolean;  // Unit is currently charging toward target
   isBeingAttacked?: boolean;   // Unit is being attacked
   attackingUp?: boolean;       // Direction of charge (up = toward opponent)
+  isSummoned?: boolean;        // Unit was just summoned (show summoning effect)
   onSelect?: () => void;
   onAttackTarget?: () => void;
   onLongPress?: () => void;
@@ -86,6 +87,284 @@ const RARITY_COLORS: Record<CardRarity, { border: string[]; accent: string }> = 
   epic: { border: ['#7c3aed', '#a855f7'], accent: '#a855f7' },
   legendary: { border: ['#b45309', '#f59e0b', '#dc2626'], accent: '#f59e0b' },
 };
+
+// Epic Attack Animation Component
+export function EpicAttackAnimation({
+  attackerUnit,
+  targetUnit,
+  damageDealt,
+  isLethal,
+  phase,
+  onComplete
+}: {
+  attackerUnit: UnitInPlay;
+  targetUnit: UnitInPlay;
+  damageDealt: number;
+  isLethal: boolean;
+  phase: string;
+  onComplete: () => void;
+}) {
+  const [animationPhase, setAnimationPhase] = useState<'hover' | 'clash' | 'damage' | 'degrade' | 'reset'>('hover');
+  const attackerScale = useSharedValue(1);
+  const targetScale = useSharedValue(1);
+  const attackerTranslateY = useSharedValue(0);
+  const targetTranslateY = useSharedValue(0);
+  const attackerGlow = useSharedValue(0);
+  const targetShake = useSharedValue(0);
+  const screenShake = useSharedValue(0);
+  const vignetteOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (phase === 'hover') {
+      // Phase 1: Pre-attack hover (0.2s)
+      attackerGlow.value = withTiming(1, { duration: 200 });
+      attackerScale.value = withTiming(1.2, { duration: 200 });
+      attackerTranslateY.value = withTiming(-20, { duration: 200 });
+
+      targetShake.value = withRepeat(withTiming(5, { duration: 50 }), 4, true);
+
+      setTimeout(() => setAnimationPhase('clash'), 200);
+    } else if (phase === 'clash') {
+      // Phase 2: Scale-up clash (0.4s)
+      attackerScale.value = withTiming(1.5, { duration: 200 });
+      targetScale.value = withTiming(1.5, { duration: 200 });
+      screenShake.value = withRepeat(withTiming(10, { duration: 50 }), 8, true);
+      vignetteOpacity.value = withTiming(0.3, { duration: 200 });
+
+      setTimeout(() => setAnimationPhase('damage'), 400);
+    } else if (phase === 'damage') {
+      // Phase 3: Damage reveal (0.5s)
+      screenShake.value = withTiming(0, { duration: 100 });
+      setTimeout(() => setAnimationPhase('degrade'), 500);
+    } else if (phase === 'degrade') {
+      // Phase 4: Degradation (0.3s)
+      if (isLethal) {
+        targetScale.value = withTiming(0.8, { duration: 150 });
+      }
+      setTimeout(() => setAnimationPhase('reset'), 300);
+    } else if (phase === 'reset') {
+      // Phase 5: Reset (0.2s)
+      attackerScale.value = withTiming(1, { duration: 200 });
+      targetScale.value = withTiming(1, { duration: 200 });
+      attackerTranslateY.value = withTiming(0, { duration: 200 });
+      targetTranslateY.value = withTiming(0, { duration: 200 });
+      attackerGlow.value = withTiming(0, { duration: 200 });
+      vignetteOpacity.value = withTiming(0, { duration: 200 });
+
+      setTimeout(onComplete, 200);
+    }
+  }, [phase, animationPhase]);
+
+  const attackerStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: attackerScale.value },
+      { translateY: attackerTranslateY.value },
+    ],
+    shadowOpacity: attackerGlow.value,
+    shadowColor: '#ff00ff',
+    shadowRadius: 20,
+  }));
+
+  const targetStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: targetScale.value },
+      { translateX: targetShake.value },
+    ],
+  }));
+
+  const screenStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: screenShake.value }],
+  }));
+
+  const vignetteStyle = useAnimatedStyle(() => ({
+    opacity: vignetteOpacity.value,
+  }));
+
+  return (
+    <Animated.View style={[screenStyle, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
+      {/* Vignette overlay */}
+      <Animated.View style={[vignetteStyle, {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+      }]} />
+
+      {/* Attacker glow effect */}
+      <Animated.View style={[attackerStyle, {
+        position: 'absolute',
+        borderWidth: 2,
+        borderColor: '#ff00ff',
+        borderRadius: 8,
+      }]} />
+
+      {/* Target shake effect */}
+      <Animated.View style={[targetStyle, {
+        position: 'absolute',
+      }]} />
+
+      {/* Blood splatter effect */}
+      {animationPhase === 'damage' && (
+        <BloodSplatterEffect damageAmount={damageDealt} isLethal={isLethal} />
+      )}
+
+      {/* Damage number */}
+      {animationPhase === 'damage' && (
+        <DamageNumberEffect amount={damageDealt} />
+      )}
+    </Animated.View>
+  );
+}
+
+// Blood splatter physics component
+function BloodSplatterEffect({ damageAmount, isLethal }: { damageAmount: number; isLethal: boolean }) {
+  const [bloodDrops, setBloodDrops] = useState<Array<{
+    id: string;
+    x: number;
+    y: number;
+    rotation: number;
+    scale: number;
+  }>>([]);
+
+  useEffect(() => {
+    const drops = [];
+    const numDrops = Math.min(damageAmount * 3, 20); // More damage = more blood
+
+    for (let i = 0; i < numDrops; i++) {
+      drops.push({
+        id: `blood-${i}`,
+        x: Math.random() * 300 - 150, // Spread around center
+        y: Math.random() * 200 - 100,
+        rotation: Math.random() * 360,
+        scale: 0.5 + Math.random() * 1.5,
+      });
+    }
+
+    setBloodDrops(drops);
+
+    // Clean up after animation
+    setTimeout(() => setBloodDrops([]), 2000);
+  }, [damageAmount, isLethal]);
+
+  return (
+    <View style={{ position: 'absolute', top: '50%', left: '50%', width: 0, height: 0 }}>
+      {bloodDrops.map((drop) => (
+        <Animated.View
+          key={drop.id}
+          entering={SlideInDown.duration(300).springify()}
+          exiting={FadeOut.duration(1000)}
+          style={{
+            position: 'absolute',
+            left: drop.x,
+            top: drop.y,
+            transform: [
+              { rotate: `${drop.rotation}deg` },
+              { scale: drop.scale }
+            ],
+          }}
+        >
+          <Text style={{ fontSize: 24, color: '#dc2626' }}>
+            {isLethal && Math.random() > 0.7 ? '💀' : '🩸'}
+          </Text>
+        </Animated.View>
+      ))}
+    </View>
+  );
+}
+
+// Explosive damage number component
+function DamageNumberEffect({ amount }: { amount: number }) {
+  const scale = useSharedValue(0.1);
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withSequence(
+      withTiming(3, { duration: 200 }),
+      withTiming(2, { duration: 300 })
+    );
+
+    opacity.value = withDelay(500, withTiming(0, { duration: 300 }));
+  }, [amount]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[animatedStyle, {
+      position: 'absolute',
+      top: '40%',
+      left: '50%',
+      marginLeft: -50,
+      alignItems: 'center',
+    }]}>
+      <Text style={{
+        fontSize: 48,
+        fontWeight: 'bold',
+        color: '#fbbf24',
+        textShadowColor: '#000',
+        textShadowOffset: { width: 2, height: 2 },
+        textShadowRadius: 4,
+      }}>
+        -{amount}
+      </Text>
+
+      {/* Particle effects */}
+      {Array.from({ width: 8 }).map((_, i) => (
+        <Animated.View
+          key={i}
+          entering={ZoomIn.duration(300).springify()}
+          style={{
+            position: 'absolute',
+            width: 4,
+            height: 4,
+            backgroundColor: '#fbbf24',
+            borderRadius: 2,
+            left: Math.random() * 100 - 50,
+            top: Math.random() * 100 - 50,
+          }}
+        />
+      ))}
+    </Animated.View>
+  );
+}
+
+// Summon effect component
+function SummonEffect({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 1500);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <Animated.View
+      entering={ZoomIn.duration(300).springify()}
+      exiting={FadeOut.duration(500)}
+      style={summonStyles.container}
+    >
+      <Animated.View
+        entering={withSequence(
+          withTiming(1, { duration: 200 }),
+          withRepeat(withTiming(1.2, { duration: 400 }), 2, true),
+          withTiming(1, { duration: 200 })
+        )}
+        style={summonStyles.pulseRing}
+      />
+      <Animated.View
+        entering={withSequence(
+          withDelay(200),
+          withTiming(1, { duration: 200 }),
+          withRepeat(withTiming(1.3, { duration: 300 }), 2, true),
+          withTiming(1, { duration: 200 })
+        )}
+        style={summonStyles.innerRing}
+      />
+      <View style={summonStyles.summonIcon}>
+        <Text style={summonStyles.summonText}>✨</Text>
+      </View>
+    </Animated.View>
+  );
+}
 
 // Impact explosion component
 function ImpactExplosion({ onComplete }: { onComplete: () => void }) {
@@ -152,6 +431,132 @@ const impactStyles = StyleSheet.create({
   },
 });
 
+const summonStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 120,
+    height: 120,
+    marginLeft: -60,
+    marginTop: -60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#fbbf24',
+    opacity: 0.8,
+  },
+  innerRing: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    opacity: 0.6,
+  },
+  summonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fbbf24',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#fbbf24',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  summonText: {
+    fontSize: 20,
+    color: '#1f2937',
+    fontWeight: 'bold',
+  },
+
+  // Effect Icons
+  effectIcons: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    flexDirection: 'row',
+    gap: 1,
+  },
+  effectIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  silenceIcon: {
+    backgroundColor: '#6b7280',
+  },
+  stunIcon: {
+    backgroundColor: '#f59e0b',
+  },
+  buffIcon: {
+    backgroundColor: '#10b981',
+  },
+  effectIconText: {
+    fontSize: 8,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+});
+
+const effectIconStyles = StyleSheet.create({
+  effectIcons: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    flexDirection: 'row',
+    gap: 1,
+  },
+  effectIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  silenceIcon: {
+    backgroundColor: '#6b7280',
+  },
+  stunIcon: {
+    backgroundColor: '#f59e0b',
+  },
+  buffIcon: {
+    backgroundColor: '#10b981',
+  },
+  effectIconText: {
+    fontSize: 8,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+});
+
 export default function UnitOnBoard({
   unit,
   isOwned,
@@ -161,6 +566,7 @@ export default function UnitOnBoard({
   isChargingAttack = false,
   isBeingAttacked = false,
   attackingUp = true,
+  isSummoned = false,
   onSelect,
   onAttackTarget,
   onLongPress,
@@ -181,9 +587,17 @@ export default function UnitOnBoard({
   const [damageAmount, setDamageAmount] = useState<number | null>(null);
   const [healAmount, setHealAmount] = useState<number | null>(null);
   const [showImpact, setShowImpact] = useState(false);
+  const [showSummonEffect, setShowSummonEffect] = useState(isSummoned);
 
   const design = unit.design;
   const rarityConfig = RARITY_COLORS[design.rarity];
+
+  // Trigger summon effect when unit is newly summoned
+  useEffect(() => {
+    if (isSummoned && !showSummonEffect) {
+      setShowSummonEffect(true);
+    }
+  }, [isSummoned]);
 
   // Detect health changes and trigger animations
   useEffect(() => {
@@ -356,9 +770,33 @@ export default function UnitOnBoard({
           />
         )}
         
+        {/* Effect Status Icons */}
+        <View style={styles.effectIcons}>
+          {unit.isSilenced && (
+            <View style={[styles.effectIcon, styles.silenceIcon]}>
+              <Text style={styles.effectIconText}>🤫</Text>
+            </View>
+          )}
+          {unit.isStunned && (
+            <View style={[styles.effectIcon, styles.stunIcon]}>
+              <Text style={styles.effectIconText}>😵</Text>
+            </View>
+          )}
+          {(unit.attackBuff > 0 || unit.healthBuff > 0) && (
+            <View style={[styles.effectIcon, styles.buffIcon]}>
+              <Text style={styles.effectIconText}>💪</Text>
+            </View>
+          )}
+        </View>
+
         {/* Impact Explosion when being attacked */}
         {showImpact && (
           <ImpactExplosion onComplete={() => setShowImpact(false)} />
+        )}
+
+        {/* Summon Effect when unit appears */}
+        {showSummonEffect && (
+          <SummonEffect onComplete={() => setShowSummonEffect(false)} />
         )}
         
         {/* Can Attack Glow - Pulsing */}

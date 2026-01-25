@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,18 +13,18 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing, interpolate } from 'react-native-reanimated';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthContext } from '../../src/context/AuthContext';
 
 export default function PlayerAuthScreen() {
   const router = useRouter();
-  const { signIn } = useAuthContext();
+  const { signIn, player, loading: authLoading } = useAuthContext();
   
+  // All hooks must be called before any early returns
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  // Form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -32,6 +32,52 @@ export default function PlayerAuthScreen() {
   const [username, setUsername] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  // Logo animation values
+  const funnyOAnimation = useSharedValue(0);
+
+  // Animated styles for funny O
+  const funnyOAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: interpolate(funnyOAnimation.value, [0, 1], [1, 1.05]) },
+      { rotate: `${interpolate(funnyOAnimation.value, [0, 1], [0, 5])}deg` },
+    ],
+  }));
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && player) {
+      router.replace('/player/profile');
+    }
+  }, [player, authLoading, router]);
+
+  // Start logo animations
+  useEffect(() => {
+    funnyOAnimation.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Don't render if already logged in (will redirect)
+  if (player) {
+    return null;
+  }
 
   const pickAvatar = async () => {
     try {
@@ -214,7 +260,7 @@ export default function PlayerAuthScreen() {
           username: username.toLowerCase().trim(),
           email: email.toLowerCase().trim(),
           avatar_url: uploadedAvatarUrl,
-          ducats: 100, // Starting currency
+          ducats: 0, // Starting currency - new users get 0 ducats
         });
 
       if (profileError) {
@@ -273,18 +319,26 @@ export default function PlayerAuthScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Background */}
-        <View style={styles.bgGradient1} />
-        <View style={styles.bgGradient2} />
-
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.logo}>🎮</Text>
-            <Text style={styles.title}>LOLSTONE</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>PLAYER PORTAL</Text>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoTopContainer}>
+                <Text style={styles.logoTop}>L</Text>
+                <Animated.View style={[styles.funnyOContainer, funnyOAnimatedStyle]}>
+                  <View style={styles.funnyO}>
+                    <View style={styles.funnyOInner}>
+                      <View style={styles.funnyOLeftEye} />
+                      <View style={styles.funnyORightEye} />
+                      <View style={styles.funnyOMouth} />
+                    </View>
+                  </View>
+                </Animated.View>
+                <Text style={styles.logoTop}>L</Text>
+              </View>
+              <Text style={styles.logoBottom}>STONE</Text>
             </View>
+            <Text style={styles.subtitle}>Player Portal</Text>
           </View>
 
           {/* Form Card */}
@@ -298,7 +352,7 @@ export default function PlayerAuthScreen() {
 
             {error ? (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>⚠️ {error}</Text>
+                <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
 
@@ -309,7 +363,6 @@ export default function PlayerAuthScreen() {
                   <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarPlaceholderIcon}>📷</Text>
                     <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
                   </View>
                 )}
@@ -424,7 +477,7 @@ export default function PlayerAuthScreen() {
 
           {/* Footer */}
           <Text style={styles.footer}>
-            Collect. Battle. Meme. 🔥
+            Collect. Battle. Meme.
           </Text>
         </View>
       </ScrollView>
@@ -437,64 +490,119 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0a0a0f',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#94a3b8',
+    fontSize: 16,
+  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
+    minHeight: '100%',
   },
   content: {
     alignItems: 'center',
     zIndex: 1,
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
   },
-  bgGradient1: {
-    position: 'absolute',
-    width: 350,
-    height: 350,
-    borderRadius: 175,
-    backgroundColor: '#22c55e',
-    top: -150,
-    right: -100,
-    opacity: 0.08,
-  },
-  bgGradient2: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: '#3b82f6',
-    bottom: -100,
-    left: -100,
-    opacity: 0.08,
-  },
-
   // Header
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 48,
   },
-  logo: {
-    fontSize: 56,
-    marginBottom: 8,
+  logoContainer: {
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 16,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#22c55e',
-    letterSpacing: 4,
+  logoTopContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
-  badge: {
-    marginTop: 12,
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.3)',
+  logoTop: {
+    fontSize: 64,
+    fontWeight: '900',
+    letterSpacing: 6,
+    color: '#00f5d4',
+    zIndex: 1,
+    lineHeight: 70,
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#22c55e',
+  funnyOContainer: {
+    width: 70,
+    height: 70,
+    position: 'relative',
+    marginHorizontal: 4,
+  },
+  funnyO: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 5,
+    borderColor: '#00f5d4',
+    backgroundColor: 'rgba(0, 245, 212, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    position: 'relative',
+  },
+  funnyOInner: {
+    width: 52,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  funnyOLeftEye: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00f5d4',
+  },
+  funnyORightEye: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00f5d4',
+  },
+  funnyOMouth: {
+    position: 'absolute',
+    bottom: 10,
+    width: 26,
+    height: 18,
+    borderBottomWidth: 3,
+    borderBottomColor: '#00f5d4',
+    borderBottomLeftRadius: 13,
+    borderBottomRightRadius: 13,
+  },
+  logoBottom: {
+    fontSize: 42,
+    fontWeight: '900',
+    letterSpacing: 5,
+    color: '#ffffff',
+    zIndex: 1,
+    lineHeight: 46,
+    marginTop: -16,
+    transform: [{ rotate: '-5deg' }],
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#94a3b8',
+    fontWeight: '500',
     letterSpacing: 1,
   },
 
@@ -504,22 +612,24 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     backgroundColor: '#1a1a24',
     borderRadius: 16,
-    padding: 24,
+    padding: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   cardSubtitle: {
-    fontSize: 14,
-    color: '#64748b',
+    fontSize: 16,
+    color: '#94a3b8',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
+    fontWeight: '400',
   },
 
   // Error
@@ -533,8 +643,9 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#f87171',
-    fontSize: 13,
+    fontSize: 14,
     textAlign: 'center',
+    fontWeight: '500',
   },
 
   // Avatar
@@ -547,27 +658,23 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 3,
-    borderColor: '#22c55e',
+    borderColor: '#00f5d4',
   },
   avatarPlaceholder: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     borderStyle: 'dashed',
-  },
-  avatarPlaceholderIcon: {
-    fontSize: 28,
-    marginBottom: 4,
   },
   avatarPlaceholderText: {
     fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
+    color: '#94a3b8',
+    fontWeight: '500',
   },
 
   // Inputs
@@ -575,36 +682,37 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#94a3b8',
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   input: {
     backgroundColor: '#0f0f14',
     borderRadius: 8,
     padding: 14,
-    color: '#f8fafc',
-    fontSize: 15,
+    color: '#ffffff',
+    fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
 
   // Submit
   submitButton: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#00f5d4',
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
   },
   submitButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   submitButtonText: {
     color: '#0a0a0f',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -618,24 +726,27 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
     textAlign: 'center',
+    fontWeight: '400',
   },
 
   // Back Link
   backLink: {
-    marginTop: 8,
+    marginTop: 12,
     padding: 8,
   },
   backLinkText: {
     color: '#64748b',
-    fontSize: 13,
+    fontSize: 14,
     textAlign: 'center',
+    fontWeight: '400',
   },
 
   // Footer
   footer: {
-    marginTop: 32,
-    color: '#475569',
-    fontSize: 13,
+    marginTop: 40,
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '400',
   },
 });
 

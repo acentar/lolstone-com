@@ -33,6 +33,7 @@ interface GameBoardProps {
   selectedAttackerId: string | null;
   validAttackTargets: string[];
   attackAnimation?: AttackAnimation | null;
+  summonedUnits?: Set<string>;
   onSelectUnit?: (unitId: string) => void;
   onAttackTarget?: (targetId: string) => void;
   onAttackFace?: () => void;
@@ -49,6 +50,7 @@ export default function GameBoard({
   selectedAttackerId,
   validAttackTargets,
   attackAnimation,
+  summonedUnits = new Set(),
   onSelectUnit,
   onAttackTarget,
   onAttackFace,
@@ -104,6 +106,7 @@ export default function GameBoard({
             isChargingAttack={isChargingAttack || false}
             isBeingAttacked={isBeingAttacked || false}
             attackingUp={chargesUp}
+            isSummoned={summonedUnits?.has(unit.id) || false}
             onSelect={() => onSelectUnit?.(unit.id)}
             onAttackTarget={() => onAttackTarget?.(unit.id)}
             onLongPress={() => onUnitLongPress?.(unit.id)}

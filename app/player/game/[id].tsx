@@ -117,8 +117,8 @@ export default function GamePlayScreen() {
         gameInstanceRef.current = newInstance;
         setGameInstance(newInstance);
       } else {
-        // Update existing instance's internal state
-        gameInstanceRef.current.setState(serverState);
+        // Update existing instance's internal state AND notify subscribers for UI update
+        gameInstanceRef.current.setState(serverState, true);
       }
       
       // Reset sync flag quickly to allow next action
@@ -166,10 +166,16 @@ export default function GamePlayScreen() {
     
     let isPolling = true;
     let pollCount = 0;
-    
+    let lastPollTime = 0;
+
     const pollGameState = async () => {
       if (!isPolling) return;
-      
+
+      // Prevent polling too frequently (minimum 100ms between polls)
+      const now = Date.now();
+      if (now - lastPollTime < 100) return;
+      lastPollTime = now;
+
       try {
         const room = await matchmakingService.getGameRoom(gameRoomId);
         if (room?.game_state) {
@@ -195,8 +201,8 @@ export default function GamePlayScreen() {
       }
     };
 
-    // Poll every 300ms for near-instant sync (faster than before)
-    const pollInterval = setInterval(pollGameState, 300);
+    // Poll every 200ms for ultra-fast sync
+    const pollInterval = setInterval(pollGameState, 200);
     
     // Also poll immediately on mount
     pollGameState();
@@ -211,14 +217,17 @@ export default function GamePlayScreen() {
   useEffect(() => {
     if (!gameRoomId || !player) return;
 
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (!document.hidden) {
         console.log('📱 Tab became visible - fetching latest state');
-        matchmakingService.getGameRoom(gameRoomId).then((room) => {
+        try {
+          const room = await matchmakingService.getGameRoom(gameRoomId);
           if (room?.game_state) {
             applyServerState(room.game_state as GameState);
           }
-        });
+        } catch (error) {
+          console.warn('Failed to fetch game state on visibility change:', error);
+        }
       }
     };
 

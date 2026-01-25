@@ -319,10 +319,19 @@ export class GameInstance {
   
   /**
    * Update internal state from external source (e.g., server sync)
-   * Does NOT notify subscribers (to avoid loops)
+   * @param newState - The new state to set
+   * @param notifySubscribers - Whether to notify subscribers (default: false to avoid loops)
    */
-  setState(newState: GameState): void {
+  setState(newState: GameState, notifySubscribers: boolean = false): void {
     this.state = newState;
+
+    // Notify subscribers if requested (used for server sync)
+    if (notifySubscribers) {
+      console.log('🔄 setState: Notifying subscribers after server sync');
+      for (const subscriber of this.subscribers) {
+        subscriber(this.state);
+      }
+    }
   }
   
   getHistory(): GameAction[] {

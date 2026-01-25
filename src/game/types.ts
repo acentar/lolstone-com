@@ -136,6 +136,7 @@ export interface GameState {
 export interface PendingEffect {
   id: string;
   sourceUnitId: string | null;   // Unit that triggered the effect
+  sourceCard?: CardInHand | null; // Card that triggered the effect (for action cards)
   sourcePlayerId: string;        // Owner of the effect
   effect: CardEffect;            // The effect definition
   targetIds: string[];           // Resolved target IDs

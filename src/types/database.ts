@@ -33,18 +33,20 @@ export type EffectTarget =
   | 'random_enemy' 
   | 'random_friendly';
 
-export type EffectAction = 
-  | 'damage' 
-  | 'heal' 
-  | 'draw' 
-  | 'buff_attack' 
-  | 'buff_health' 
-  | 'destroy' 
-  | 'summon' 
-  | 'silence' 
-  | 'return_hand' 
+export type EffectAction =
+  | 'damage'
+  | 'heal'
+  | 'draw'
+  | 'buff_attack'
+  | 'buff_health'
+  | 'destroy'
+  | 'summon'
+  | 'silence'
+  | 'return_hand'
   | 'copy'
   | 'stun';
+
+// Info objects for UI display
 
 export interface Database {
   public: {
@@ -425,90 +427,58 @@ export interface CardDesignFull extends CardDesign {
 }
 
 // Keyword display info
-export const KEYWORD_INFO: Record<CardKeyword, { name: string; description: string; icon: string }> = {
-  frontline: {
-    name: 'Frontline',
-    description: 'Enemies must attack this unit first',
-    icon: '🛡️',
-  },
-  quick: {
-    name: 'Quick',
-    description: 'Can attack immediately when played',
-    icon: '⚡',
-  },
-  evasion: {
-    name: 'Evasion',
-    description: 'Cannot be targeted by actions',
-    icon: '💨',
-  },
-  boost: {
-    name: 'Boost',
-    description: '+1 Attack and +1 Health',
-    icon: '💪',
-  },
+export const KEYWORD_INFO: Record<CardKeyword, { icon: string; name: string; description: string }> = {
+  frontline: { icon: '🏰', name: 'Frontline', description: 'Can be targeted by enemy attacks' },
+  quick: { icon: '⚡', name: 'Quick', description: 'Can attack immediately when summoned' },
+  evasion: { icon: '🌀', name: 'Evasion', description: '50% chance to avoid attacks' },
+  boost: { icon: '⭐', name: 'Boost', description: 'Gets stronger each turn alive' },
 };
 
 // Effect trigger display info
-export const TRIGGER_INFO: Record<EffectTrigger, { name: string; icon: string }> = {
-  on_play: { name: 'On Play', icon: '▶️' },
-  on_destroy: { name: 'On Destroy', icon: '💀' },
-  on_attack: { name: 'On Attack', icon: '⚔️' },
-  on_damaged: { name: 'On Damaged', icon: '💔' },
-  end_of_turn: { name: 'End of Turn', icon: '🔚' },
-  start_of_turn: { name: 'Start of Turn', icon: '🔛' },
+export const TRIGGER_INFO: Record<EffectTrigger, { icon: string; name: string }> = {
+  on_play: { icon: '🎴', name: 'On Play' },
+  on_destroy: { icon: '💀', name: 'On Destroy' },
+  on_attack: { icon: '⚔️', name: 'On Attack' },
+  on_damaged: { icon: '🎯', name: 'On Damaged' },
+  end_of_turn: { icon: '🌙', name: 'End of Turn' },
+  start_of_turn: { icon: '🌅', name: 'Start of Turn' },
 };
 
 // Effect action display info
-export const ACTION_INFO: Record<EffectAction, { name: string; icon: string }> = {
-  damage: { name: 'Deal Damage', icon: '💥' },
-  heal: { name: 'Heal', icon: '❤️‍🩹' },
-  draw: { name: 'Draw Cards', icon: '🃏' },
-  buff_attack: { name: 'Buff Attack', icon: '⚔️' },
-  buff_health: { name: 'Buff Health', icon: '❤️' },
-  destroy: { name: 'Destroy', icon: '☠️' },
-  summon: { name: 'Summon', icon: '✨' },
-  silence: { name: 'Silence', icon: '🤐' },
-  return_hand: { name: 'Return to Hand', icon: '↩️' },
-  copy: { name: 'Copy', icon: '📋' },
-  stun: { name: 'Stun', icon: '🥶' },
+export const ACTION_INFO: Record<EffectAction, { icon: string; name: string; description: string }> = {
+  damage: { icon: '💥', name: 'Damage', description: 'Deal damage to target (reduces health)' },
+  heal: { icon: '💚', name: 'Heal', description: 'Restore health to target' },
+  draw: { icon: '🃏', name: 'Draw', description: 'Draw cards from your deck' },
+  buff_attack: { icon: '⚔️', name: 'Buff Attack', description: 'Permanently increase attack' },
+  buff_health: { icon: '🛡️', name: 'Buff Health', description: 'Permanently increase max health' },
+  destroy: { icon: '💀', name: 'Destroy', description: 'Instantly kill the target unit' },
+  summon: { icon: '🎭', name: 'Summon', description: 'Create token units on the board' },
+  silence: { icon: '🤫', name: 'Silence', description: 'Remove all effects from target' },
+  return_hand: { icon: '🔄', name: 'Return Hand', description: 'Send target back to owner\'s hand' },
+  copy: { icon: '📋', name: 'Copy', description: 'Duplicate another card\'s effects' },
+  stun: { icon: '😵', name: 'Stun', description: 'Unit cannot attack next turn' },
 };
 
 // Target display info
-export const TARGET_INFO: Record<EffectTarget, { name: string }> = {
-  self: { name: 'This Unit' },
-  friendly_unit: { name: 'Friendly Unit' },
-  enemy_unit: { name: 'Enemy Unit' },
-  any_unit: { name: 'Any Unit' },
-  friendly_player: { name: 'Your Hero' },
-  enemy_player: { name: 'Enemy Hero' },
-  all_friendly: { name: 'All Friendly Units' },
-  all_enemies: { name: 'All Enemy Units' },
-  all_units: { name: 'All Units' },
-  random_enemy: { name: 'Random Enemy' },
-  random_friendly: { name: 'Random Friendly' },
+export const TARGET_INFO: Record<EffectTarget, { icon: string; name: string; description: string }> = {
+  self: { icon: '🪞', name: 'Self', description: 'This card/unit' },
+  friendly_unit: { icon: '💚', name: 'Friendly Unit', description: 'Choose your unit' },
+  enemy_unit: { icon: '💔', name: 'Enemy Unit', description: 'Choose opponent\'s unit' },
+  any_unit: { icon: '🎲', name: 'Any Unit', description: 'Choose any unit on the board' },
+  friendly_player: { icon: '👤', name: 'Friendly Player', description: 'Your health/mana' },
+  enemy_player: { icon: '👥', name: 'Enemy Player', description: 'Opponent\'s health/mana' },
+  all_friendly: { icon: '💚', name: 'All Friendly', description: 'All your units' },
+  all_enemies: { icon: '💔', name: 'All Enemies', description: 'All opponent units' },
+  all_units: { icon: '🎲', name: 'All Units', description: 'Every unit on the board' },
+  random_enemy: { icon: '🎯', name: 'Random Enemy', description: 'Random enemy unit' },
+  random_friendly: { icon: '🎲', name: 'Random Friendly', description: 'Random your unit' },
 };
 
 // Token trigger display info
-export const TOKEN_TRIGGER_INFO: Record<TokenTrigger, { name: string; icon: string; description: string }> = {
-  on_play: { 
-    name: 'On Play', 
-    icon: '▶️',
-    description: 'Summon tokens when this card is played'
-  },
-  on_destroy: { 
-    name: 'On Destroy', 
-    icon: '💀',
-    description: 'Summon tokens when this unit is destroyed'
-  },
-  on_attack: { 
-    name: 'On Attack', 
-    icon: '⚔️',
-    description: 'Summon a token when this unit attacks (limited uses)'
-  },
-  on_damaged: { 
-    name: 'On Damaged', 
-    icon: '💔',
-    description: 'Summon a token when this unit takes damage (limited uses)'
-  },
+export const TOKEN_TRIGGER_INFO: Record<TokenTrigger, { icon: string; name: string; description: string }> = {
+  on_play: { icon: '🎴', name: 'On Play', description: 'When parent card is played' },
+  on_destroy: { icon: '💀', name: 'On Destroy', description: 'When parent unit dies' },
+  on_attack: { icon: '⚔️', name: 'On Attack', description: 'When parent unit attacks' },
+  on_damaged: { icon: '🎯', name: 'On Damaged', description: 'When parent takes damage' },
 };
 

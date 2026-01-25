@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Modal, Pressable, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, Modal, Pressable, useWindowDimensions, Linking } from 'react-native';
 import { Text, IconButton, Divider, ActivityIndicator, Chip, Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { 
-  CardDesign, CardKeyword, CardEffect, 
+import {
+  CardDesign, CardKeyword, CardEffect,
   KEYWORD_INFO, TRIGGER_INFO, ACTION_INFO, TARGET_INFO, TOKEN_TRIGGER_INFO, TokenTrigger,
 } from '../types/database';
+import { UnitInPlay } from '../game/types';
 import CardPreview from './CardPreview';
 import TokenPreview from './TokenPreview';
 import DeleteConfirmModal from './DeleteConfirmModal';
@@ -21,6 +23,7 @@ interface CardDetailModalProps {
   visible: boolean;
   onClose: () => void;
   cardDesign: CardDesign | null;
+  unitInPlay?: UnitInPlay | null; // For showing effect status in-game
   isGameMaster?: boolean;
   onEdit?: (card: CardDesign) => void;
   onDelete?: (cardId: string) => void;
@@ -38,11 +41,13 @@ export default function CardDetailModal({
   visible,
   onClose,
   cardDesign,
+  unitInPlay,
   isGameMaster = false,
   onEdit,
   onDelete,
 }: CardDetailModalProps) {
   const { width } = useWindowDimensions();
+  const router = useRouter();
   const isDesktop = width >= 900;
   
   const [loading, setLoading] = useState(false);
@@ -239,6 +244,48 @@ export default function CardDetailModal({
               : `Summons on ${(cardDesign.token_trigger as string).replace('_', ' ')} (max ${cardDesign.token_max_summons}×)`
             }
           </Text>
+        </View>
+      )}
+
+      {/* Effect Status (for units in play) */}
+      {unitInPlay && (
+        <View style={styles.effectStatusSection}>
+          <Text style={styles.effectStatusTitle}>⚡ Current Effects</Text>
+          <View style={styles.effectStatusList}>
+            {unitInPlay.isSilenced && (
+              <View style={styles.effectStatusItem}>
+                <Text style={styles.effectStatusIcon}>🤫</Text>
+                <Text style={styles.effectStatusText}>Silenced - Keywords and effects disabled</Text>
+              </View>
+            )}
+            {unitInPlay.isStunned && (
+              <View style={styles.effectStatusItem}>
+                <Text style={styles.effectStatusIcon}>😵</Text>
+                <Text style={styles.effectStatusText}>Stunned - Cannot attack next turn</Text>
+              </View>
+            )}
+            {unitInPlay.attackBuff > 0 && (
+              <View style={styles.effectStatusItem}>
+                <Text style={styles.effectStatusIcon}>⚔️</Text>
+                <Text style={styles.effectStatusText}>Attack Buff: +{unitInPlay.attackBuff}</Text>
+              </View>
+            )}
+            {unitInPlay.healthBuff > 0 && (
+              <View style={styles.effectStatusItem}>
+                <Text style={styles.effectStatusIcon}>🛡️</Text>
+                <Text style={styles.effectStatusText}>Health Buff: +{unitInPlay.healthBuff}</Text>
+              </View>
+            )}
+            {!unitInPlay.canAttack && (
+              <View style={styles.effectStatusItem}>
+                <Text style={styles.effectStatusIcon}>😴</Text>
+                <Text style={styles.effectStatusText}>Cannot attack this turn</Text>
+              </View>
+            )}
+            {!unitInPlay.isSilenced && !unitInPlay.isStunned && unitInPlay.attackBuff === 0 && unitInPlay.healthBuff === 0 && unitInPlay.canAttack && (
+              <Text style={styles.noEffectsText}>No active effects</Text>
+            )}
+          </View>
         </View>
       )}
     </View>
@@ -441,6 +488,22 @@ export default function CardDetailModal({
           </Text>
         </View>
       </View>
+
+      {/* Public Page Link */}
+      {cardDesign && (
+        <View style={styles.publicLinkSection}>
+          <Pressable
+            onPress={() => {
+              onClose();
+              router.push(`/card/${cardDesign.id}`);
+            }}
+            style={styles.publicLinkButton}
+          >
+            <Text style={styles.publicLinkText}>View Public Page</Text>
+            <Text style={styles.publicLinkIcon}>→</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Action Buttons (GM only) */}
       {isGameMaster && (onEdit || onDelete) && (
@@ -716,6 +779,22 @@ export default function CardDetailModal({
                     </Text>
                   </View>
                 </View>
+
+                {/* Public Page Link */}
+                {cardDesign && (
+                  <View style={styles.publicLinkSection}>
+                    <Pressable
+                      onPress={() => {
+                        onClose();
+                        router.push(`/card/${cardDesign.id}`);
+                      }}
+                      style={styles.publicLinkButton}
+                    >
+                      <Text style={styles.publicLinkText}>View Public Page</Text>
+                      <Text style={styles.publicLinkIcon}>→</Text>
+                    </Pressable>
+                  </View>
+                )}
 
                 {/* Action Buttons (GM only) */}
                 {isGameMaster && (onEdit || onDelete) && (
@@ -1076,6 +1155,73 @@ const styles = StyleSheet.create({
   deleteButton: {
     flex: 1,
     borderColor: '#ef4444',
+  },
+  publicLinkSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  publicLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  publicLinkText: {
+    fontSize: 13,
+    color: '#60a5fa',
+    fontWeight: '500',
+  },
+  publicLinkIcon: {
+    fontSize: 16,
+    color: '#60a5fa',
+  },
+
+  // Effect Status Styles
+  effectStatusSection: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.3)',
+  },
+  effectStatusTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#f1f5f9',
+    marginBottom: 12,
+  },
+  effectStatusList: {
+    gap: 8,
+  },
+  effectStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(71, 85, 105, 0.5)',
+  },
+  effectStatusIcon: {
+    fontSize: 16,
+    marginRight: 8,
+    width: 20,
+    textAlign: 'center',
+  },
+  effectStatusText: {
+    fontSize: 13,
+    color: '#cbd5e1',
+    flex: 1,
+  },
+  noEffectsText: {
+    fontSize: 13,
+    color: '#64748b',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    padding: 8,
   },
 });
 

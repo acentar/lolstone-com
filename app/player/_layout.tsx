@@ -1,90 +1,92 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, usePathname } from 'expo-router';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
-import { Text, Avatar, Menu } from 'react-native-paper';
+import { Text, Avatar } from 'react-native-paper';
 import { colors, spacing } from '../../src/constants/theme';
 import { useAuthContext } from '../../src/context/AuthContext';
-import { useState } from 'react';
+import HeaderNavigation from '../../src/components/HeaderNavigation';
+import { useState, useEffect } from 'react';
 
 const { width } = Dimensions.get('window');
 const isDesktop = width >= 900;
 
 export default function PlayerLayout() {
-  const { player, signOut } = useAuthContext();
-  const [menuVisible, setMenuVisible] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const { player } = useAuthContext();
+  const [onlinePlayers, setOnlinePlayers] = useState(24);
+  const [activeGames, setActiveGames] = useState(6);
+
+  // Check if we're on a game route
+  const isGameRoute = pathname?.includes('/player/game/');
+
+  // Update stats periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOnlinePlayers(prev => {
+        const change = Math.floor(Math.random() * 11) - 5;
+        return Math.max(9, Math.min(36, prev + change));
+      });
+      setActiveGames(prev => {
+        const change = Math.floor(Math.random() * 5) - 2;
+        return Math.max(3, Math.min(9, prev + change));
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.logoSection}>
-            <Text style={styles.logoText}>🎮 Lolstone</Text>
-          </View>
-
-          <Pressable
-            style={styles.userSection}
-            onPress={() => setMenuVisible(true)}
-          >
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{player?.name || 'Player'}</Text>
-              <Text style={styles.userBalance}>
-                💰 {player?.ducats?.toLocaleString() || 0} ducats
-              </Text>
+      {/* Top Header with Navigation - Same as Homepage - Hidden on game routes */}
+      {!isGameRoute && (
+      <View style={styles.topHeader}>
+        <View style={styles.headerBlur}>
+          <View style={styles.headerContent}>
+            <HeaderNavigation />
+            
+            <View style={styles.statsRow}>
+              <View style={styles.statTag}>
+                <Text style={styles.statTagText}>
+                  <Text style={styles.statTagNumber}>{onlinePlayers.toLocaleString()}</Text>
+                  <Text> Online</Text>
+                </Text>
+              </View>
+              <View style={styles.statTag}>
+                <Text style={styles.statTagText}>
+                  <Text style={[styles.statTagNumber, { color: '#10b981' }]}>
+                    {activeGames.toLocaleString()}
+                  </Text>
+                  <Text> Active Games</Text>
+                </Text>
+              </View>
             </View>
-            <Avatar.Text
-              size={isDesktop ? 40 : 36}
-              label={player?.name?.charAt(0).toUpperCase() || '?'}
-              style={styles.avatar}
-              labelStyle={styles.avatarLabel}
-            />
-          </Pressable>
 
-          <Menu
-            visible={menuVisible}
-            onDismiss={() => setMenuVisible(false)}
-            anchor={<View />}
-            contentStyle={styles.menuContent}
-            style={styles.menuContainer}
-          >
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(false);
-                // Navigate to profile
-              }}
-              title="Profile"
-              leadingIcon="account"
-            />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(false);
-                // Navigate to settings
-              }}
-              title="Settings"
-              leadingIcon="cog"
-            />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(false);
-                signOut();
-              }}
-              title="Sign Out"
-              leadingIcon="logout"
-              titleStyle={{ color: '#ef4444' }}
-            />
-          </Menu>
+            {player ? (
+              <Pressable style={styles.avatarButton} onPress={() => router.push('/player/profile')}>
+                {player.avatar_url ? (
+                  <Avatar.Image size={36} source={{ uri: player.avatar_url }} />
+                ) : (
+                  <Avatar.Text
+                    size={36}
+                    label={player.name?.charAt(0).toUpperCase() || '?'}
+                    style={styles.avatar}
+                    labelStyle={styles.avatarLabel}
+                  />
+                )}
+              </Pressable>
+            ) : (
+              <Pressable style={styles.playButton} onPress={() => router.push('/auth/player')}>
+                <Text style={styles.playButtonText}>Play Now</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
+      )}
 
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: styles.tabBar,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textSecondary,
-          tabBarLabelStyle: styles.tabLabel,
-          tabBarActiveBackgroundColor: colors.primary + '20',
-          tabBarItemStyle: styles.tabItem,
-          tabBarIconStyle: styles.tabIconContainer,
+          tabBarStyle: { display: 'none' },
         }}
       >
       <Tabs.Screen
@@ -173,69 +175,77 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    shadowColor: colors.surface,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+  topHeader: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    paddingTop: 0,
+  },
+  headerBlur: {
+    backgroundColor: 'rgba(10, 10, 15, 0.85)',
+    backdropFilter: 'blur(20px)',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    minHeight: isDesktop ? 60 : 50,
-  },
-  logoSection: {
-    flex: 1,
-  },
-  logoText: {
-    fontSize: isDesktop ? 24 : 20,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: -1,
-  },
-  userSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     gap: spacing.md,
   },
-  userInfo: {
-    alignItems: 'flex-end',
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginLeft: 'auto',
+    marginRight: spacing.md,
   },
-  userName: {
-    fontSize: isDesktop ? 16 : 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
+  statTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  userBalance: {
-    fontSize: isDesktop ? 12 : 11,
-    color: colors.textSecondary,
+  statTagText: {
+    fontSize: 12,
+    color: '#94a3b8',
     fontWeight: '500',
   },
-  avatar: {
-    backgroundColor: colors.primary,
+  statTagNumber: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  playButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  playButtonText: {
+    color: '#60a5fa',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  avatarButton: {
+    padding: 2,
+    borderRadius: 18,
     borderWidth: 2,
     borderColor: colors.primary + '40',
   },
+  avatar: {
+    backgroundColor: colors.primary,
+  },
   avatarLabel: {
     color: colors.background,
-    fontSize: isDesktop ? 16 : 14,
+    fontSize: 14,
     fontWeight: '700',
-  },
-  menuContainer: {
-    marginTop: 40,
-  },
-  menuContent: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   tabBar: {
     backgroundColor: colors.surface,

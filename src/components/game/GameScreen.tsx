@@ -25,12 +25,345 @@ import Animated, {
   SlideOutUp,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GameState, GameInstance, getValidAttackTargets, canUnitAttack } from '../../game';
+import { GameState, GameInstance, getValidAttackTargets, canUnitAttack, UnitInPlay } from '../../game';
 import PlayerProfile from './PlayerProfile';
 import GameBoard from './GameBoard';
 import Hand from './Hand';
-import CardDetailModal from '../CardDetailModal';
-import { CardDesignFull } from '../../types/database';
+import CardDetailModal from '../../components/CardDetailModal';
+
+// Epic Attack Animation Component
+function EpicAttackAnimation({
+  attackerUnit,
+  targetUnit,
+  damageDealt,
+  isLethal,
+  phase,
+  onComplete
+}: {
+  attackerUnit: any;
+  targetUnit: any;
+  damageDealt: number;
+  isLethal: boolean;
+  phase: string;
+  onComplete: () => void;
+}) {
+  const [animationPhase, setAnimationPhase] = useState<'hover' | 'clash' | 'damage' | 'degrade' | 'reset'>('hover');
+  const attackerScale = useSharedValue(1);
+  const targetScale = useSharedValue(1);
+  const attackerTranslateY = useSharedValue(0);
+  const targetTranslateY = useSharedValue(0);
+  const attackerGlow = useSharedValue(0);
+  const targetShake = useSharedValue(0);
+  const screenShake = useSharedValue(0);
+  const vignetteOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (phase === 'hover') {
+      // Phase 1: Pre-attack hover (0.2s)
+      attackerGlow.value = withTiming(1, { duration: 200 });
+      attackerScale.value = withTiming(1.2, { duration: 200 });
+      attackerTranslateY.value = withTiming(-20, { duration: 200 });
+
+      targetShake.value = withRepeat(withTiming(5, { duration: 50 }), 4, true);
+
+      setTimeout(() => setAnimationPhase('clash'), 200);
+    } else if (phase === 'clash') {
+      // Phase 2: Scale-up clash (0.4s)
+      attackerScale.value = withTiming(1.5, { duration: 200 });
+      targetScale.value = withTiming(1.5, { duration: 200 });
+      screenShake.value = withRepeat(withTiming(10, { duration: 50 }), 8, true);
+      vignetteOpacity.value = withTiming(0.3, { duration: 200 });
+
+      setTimeout(() => setAnimationPhase('damage'), 400);
+    } else if (phase === 'damage') {
+      // Phase 3: Damage reveal (0.5s)
+      screenShake.value = withTiming(0, { duration: 100 });
+      setTimeout(() => setAnimationPhase('degrade'), 500);
+    } else if (phase === 'degrade') {
+      // Phase 4: Degradation (0.3s)
+      if (isLethal) {
+        targetScale.value = withTiming(0.8, { duration: 150 });
+      }
+      setTimeout(() => setAnimationPhase('reset'), 300);
+    } else if (phase === 'reset') {
+      // Phase 5: Reset (0.2s)
+      attackerScale.value = withTiming(1, { duration: 200 });
+      targetScale.value = withTiming(1, { duration: 200 });
+      attackerTranslateY.value = withTiming(0, { duration: 200 });
+      targetTranslateY.value = withTiming(0, { duration: 200 });
+      attackerGlow.value = withTiming(0, { duration: 200 });
+      vignetteOpacity.value = withTiming(0, { duration: 200 });
+
+      setTimeout(onComplete, 200);
+    }
+  }, [phase, animationPhase]);
+
+  const attackerStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: attackerScale.value },
+      { translateY: attackerTranslateY.value },
+    ],
+    shadowOpacity: attackerGlow.value,
+    shadowColor: '#ff00ff',
+    shadowRadius: 20,
+  }));
+
+  const targetStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: targetScale.value },
+      { translateX: targetShake.value },
+    ],
+  }));
+
+  const screenStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: screenShake.value }],
+  }));
+
+  const vignetteStyle = useAnimatedStyle(() => ({
+    opacity: vignetteOpacity.value,
+  }));
+
+  return (
+    <Animated.View style={[screenStyle, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
+      {/* Vignette overlay */}
+      <Animated.View style={[vignetteStyle, {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+      }]} />
+
+      {/* Attacker glow effect */}
+      <Animated.View style={[attackerStyle, {
+        position: 'absolute',
+        borderWidth: 2,
+        borderColor: '#ff00ff',
+        borderRadius: 8,
+      }]} />
+
+      {/* Target shake effect */}
+      <Animated.View style={[targetStyle, {
+        position: 'absolute',
+      }]} />
+
+      {/* Blood splatter effect */}
+      {animationPhase === 'damage' && (
+        <BloodSplatterEffect damageAmount={damageDealt} isLethal={isLethal} />
+      )}
+
+      {/* Damage number */}
+      {animationPhase === 'damage' && (
+        <DamageNumberEffect amount={damageDealt} />
+      )}
+    </Animated.View>
+  );
+}
+
+// Card Draw Animation Component
+function CardDrawAnimation({ cardCount }: { cardCount: number }) {
+  const [showAnimation, setShowAnimation] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowAnimation(false), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!showAnimation) return null;
+
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+      {/* Cards flying from deck to hand */}
+      {Array.from({ length: Math.min(cardCount, 5) }).map((_, i) => (
+        <Animated.View
+          key={`draw-card-${i}`}
+          entering={SlideInUp.duration(600).delay(i * 100).springify()}
+          exiting={FadeOut.duration(400)}
+          style={{
+            position: 'absolute',
+            right: 20 + (i * 15), // Start from deck area (right side)
+            bottom: 120 + (i * 10),
+            width: 60,
+            height: 80,
+            backgroundColor: '#1f2937',
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: '#fbbf24',
+            shadowColor: '#fbbf24',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.8,
+            shadowRadius: 10,
+            elevation: 5,
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: [
+              { rotate: `${-5 + Math.random() * 10}deg` }, // Slight random rotation
+            ],
+          }}
+        >
+          <Text style={{ fontSize: 24, color: '#fbbf24' }}>🃏</Text>
+        </Animated.View>
+      ))}
+
+      {/* Draw text effect */}
+      <Animated.View
+        entering={ZoomIn.duration(400).springify()}
+        exiting={FadeOut.duration(800)}
+        style={{
+          position: 'absolute',
+          top: '30%',
+          left: '50%',
+          marginLeft: -75,
+          backgroundColor: 'rgba(251, 191, 36, 0.9)',
+          paddingHorizontal: 20,
+          paddingVertical: 10,
+          borderRadius: 25,
+          borderWidth: 3,
+          borderColor: '#f59e0b',
+        }}
+      >
+        <Text style={{
+          fontSize: 24,
+          fontWeight: 'bold',
+          color: '#1f2937',
+          textAlign: 'center',
+        }}>
+          DRAW {cardCount} CARD{cardCount !== 1 ? 'S' : ''}! 🃏
+        </Text>
+      </Animated.View>
+
+      {/* Sparkle effects */}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Animated.View
+          key={`sparkle-${i}`}
+          entering={ZoomIn.duration(800).delay(i * 50).springify()}
+          exiting={FadeOut.duration(600)}
+          style={{
+            position: 'absolute',
+            left: Math.random() * 300 + 50,
+            top: Math.random() * 200 + 100,
+            width: 8,
+            height: 8,
+            backgroundColor: '#fbbf24',
+            borderRadius: 4,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+// Blood splatter physics component
+function BloodSplatterEffect({ damageAmount, isLethal }: { damageAmount: number; isLethal: boolean }) {
+  const [bloodDrops, setBloodDrops] = useState<Array<{
+    id: string;
+    x: number;
+    y: number;
+    rotation: number;
+    scale: number;
+  }>>([]);
+
+  useEffect(() => {
+    const drops = [];
+    const numDrops = Math.min(damageAmount * 3, 20); // More damage = more blood
+
+    for (let i = 0; i < numDrops; i++) {
+      drops.push({
+        id: `blood-${i}`,
+        x: Math.random() * 300 - 150, // Spread around center
+        y: Math.random() * 200 - 100,
+        rotation: Math.random() * 360,
+        scale: 0.5 + Math.random() * 1.5,
+      });
+    }
+
+    setBloodDrops(drops);
+
+    // Clean up after animation
+    setTimeout(() => setBloodDrops([]), 2000);
+  }, [damageAmount, isLethal]);
+
+  return (
+    <View style={{ position: 'absolute', top: '50%', left: '50%', width: 0, height: 0 }}>
+      {bloodDrops.map((drop) => (
+        <Animated.View
+          key={drop.id}
+          entering={SlideInDown.duration(300).springify()}
+          exiting={FadeOut.duration(1000)}
+          style={{
+            position: 'absolute',
+            left: drop.x,
+            top: drop.y,
+            transform: [
+              { rotate: `${drop.rotation}deg` },
+              { scale: drop.scale }
+            ],
+          }}
+        >
+          <Text style={{ fontSize: 24, color: '#dc2626' }}>
+            {isLethal && Math.random() > 0.7 ? '💀' : '🩸'}
+          </Text>
+        </Animated.View>
+      ))}
+    </View>
+  );
+}
+
+// Explosive damage number component
+function DamageNumberEffect({ amount }: { amount: number }) {
+  const scale = useSharedValue(0.1);
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withSequence(
+      withTiming(3, { duration: 200 }),
+      withTiming(2, { duration: 300 })
+    );
+
+    opacity.value = withDelay(500, withTiming(0, { duration: 300 }));
+  }, [amount]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[animatedStyle, {
+      position: 'absolute',
+      top: '40%',
+      left: '50%',
+      marginLeft: -50,
+      alignItems: 'center',
+    }]}>
+      <Text style={{
+        fontSize: 48,
+        fontWeight: 'bold',
+        color: '#fbbf24',
+        textShadowColor: '#000',
+        textShadowOffset: { width: 2, height: 2 },
+        textShadowRadius: 4,
+      }}>
+        -{amount}
+      </Text>
+
+      {/* Particle effects */}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Animated.View
+          key={i}
+          entering={ZoomIn.duration(300).springify()}
+          style={{
+            position: 'absolute',
+            width: 4,
+            height: 4,
+            backgroundColor: '#fbbf24',
+            borderRadius: 2,
+            left: Math.random() * 100 - 50,
+            top: Math.random() * 100 - 50,
+          }}
+        />
+      ))}
+    </Animated.View>
+  );
+}
 
 interface GameScreenProps {
   gameInstance: GameInstance;
@@ -105,19 +438,30 @@ export default function GameScreen({
   const [selectedAttackerId, setSelectedAttackerId] = useState<string | null>(null);
   const [showCardModal, setShowCardModal] = useState(false);
   const [cardModalDesign, setCardModalDesign] = useState<CardDesignFull | null>(null);
+  const [cardModalUnit, setCardModalUnit] = useState<UnitInPlay | null>(null);
   const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_TIME_LIMIT);
   const [showTurnBanner, setShowTurnBanner] = useState(false);
   const [turnBannerIsYourTurn, setTurnBannerIsYourTurn] = useState(false);
   
-  // Attack animation state - synced from game state
+  // Enhanced attack animation state - synced from game state
   const [attackAnimation, setAttackAnimation] = useState<{
     attackerId: string;
     targetId: string;
-    isActive: boolean;
+    damageDealt: number;
+    attackerDamageTaken?: number;
+    isLethal: boolean;
+    phase: 'hover' | 'clash' | 'damage' | 'degrade' | 'reset';
+    timestamp: number;
   } | null>(null);
   
   // Track last attack animation timestamp to detect new attacks
   const lastAttackTimestampRef = useRef<number>(0);
+
+  // Track summoned units for animation
+  const [summonedUnits, setSummonedUnits] = useState<Set<string>>(new Set());
+
+  // Track cards drawn for animation
+  const [cardsDrawn, setCardsDrawn] = useState<number>(0);
   
   // Graveyard viewing
   const [showGraveyard, setShowGraveyard] = useState<'player' | 'opponent' | null>(null);
@@ -138,6 +482,47 @@ export default function GameScreen({
   // Track previous turn to detect changes
   const prevTurnRef = useRef(gameState.currentTurn);
   const prevActivePlayerRef = useRef(gameState.activePlayerId);
+  const prevPlayerBoardRef = useRef(gameState.player1.id === playerId ? gameState.player1.board : gameState.player2.board);
+  const prevOpponentBoardRef = useRef(gameState.player1.id === playerId ? gameState.player2.board : gameState.player1.board);
+  const prevPlayerHandSizeRef = useRef(gameState.player1.id === playerId ? gameState.player1.hand.length : gameState.player2.hand.length);
+  const prevOpponentHandSizeRef = useRef(gameState.player1.id === playerId ? gameState.player2.hand.length : gameState.player1.hand.length);
+
+  // Attack animation phase progression
+  useEffect(() => {
+    if (attackAnimation) {
+      const phaseTimers = {
+        hover: 200,
+        clash: 400,
+        damage: 500,
+        degrade: 300,
+        reset: 200,
+      };
+
+      const nextPhase = () => {
+        setAttackAnimation(prev => {
+          if (!prev) return null;
+
+          const phases: Array<'hover' | 'clash' | 'damage' | 'degrade' | 'reset'> =
+            ['hover', 'clash', 'damage', 'degrade', 'reset'];
+
+          const currentIndex = phases.indexOf(prev.phase);
+          const nextIndex = currentIndex + 1;
+
+          if (nextIndex >= phases.length) {
+            return null; // Animation complete
+          }
+
+          return {
+            ...prev,
+            phase: phases[nextIndex],
+          };
+        });
+      };
+
+      const timer = setTimeout(nextPhase, phaseTimers[attackAnimation.phase]);
+      return () => clearTimeout(timer);
+    }
+  }, [attackAnimation?.phase]);
   
   // Add entry to activity log
   const addActivityLog = useCallback((message: string, type: 'attack' | 'play' | 'damage' | 'destroy' | 'turn' | 'effect') => {
@@ -234,9 +619,111 @@ export default function GameScreen({
       prevTurnRef.current = currentState.currentTurn;
     }
     
+    // Detect newly summoned units for animation
+    const currentPlayerBoard = currentState.player1.id === playerId ? currentState.player1.board : currentState.player2.board;
+    const currentOpponentBoard = currentState.player1.id === playerId ? currentState.player2.board : currentState.player1.board;
+
+    const prevPlayerBoard = prevPlayerBoardRef.current;
+    const prevOpponentBoard = prevOpponentBoardRef.current;
+
+    // Find new units that weren't in the previous state
+    const newSummonedUnits = new Set<string>();
+
+    // Check player board for new units
+    for (const unit of currentPlayerBoard) {
+      const wasInPrevBoard = prevPlayerBoard.some(prevUnit => prevUnit.id === unit.id);
+      if (!wasInPrevBoard) {
+        newSummonedUnits.add(unit.id);
+        console.log('✨ New unit summoned on player board:', unit.design.name);
+      }
+    }
+
+    // Check opponent board for new units
+    for (const unit of currentOpponentBoard) {
+      const wasInPrevBoard = prevOpponentBoard.some(prevUnit => prevUnit.id === unit.id);
+      if (!wasInPrevBoard) {
+        newSummonedUnits.add(unit.id);
+        console.log('✨ New unit summoned on opponent board:', unit.design.name);
+      }
+    }
+
+    if (newSummonedUnits.size > 0) {
+      setSummonedUnits(prev => new Set([...prev, ...newSummonedUnits]));
+      // Remove the summoning highlight after animation
+      setTimeout(() => {
+        setSummonedUnits(prev => {
+          const updated = new Set(prev);
+          newSummonedUnits.forEach(id => updated.delete(id));
+          return updated;
+        });
+      }, 2000);
+    }
+
+    // Check for new attack animation
+    if (currentState.lastAttackAnimation &&
+        currentState.lastAttackAnimation.timestamp > lastAttackTimestampRef.current) {
+
+      console.log('⚔️ Attack animation detected:', currentState.lastAttackAnimation);
+
+      // Find the units involved to calculate damage
+      const attacker = [...currentPlayerBoard, ...currentOpponentBoard]
+        .find(unit => unit.id === currentState.lastAttackAnimation!.attackerId);
+      const target = [...currentPlayerBoard, ...currentOpponentBoard]
+        .find(unit => unit.id === currentState.lastAttackAnimation!.targetId);
+
+      if (attacker && target) {
+        // Calculate damage dealt (simplified - in reality this would be more complex)
+        const damageDealt = Math.max(0, attacker.currentAttack - (target.currentAttack || 0));
+        const isLethal = target.currentHealth - damageDealt <= 0;
+
+        setAttackAnimation({
+          attackerId: currentState.lastAttackAnimation!.attackerId,
+          targetId: currentState.lastAttackAnimation!.targetId,
+          damageDealt,
+          isLethal,
+          phase: 'hover',
+          timestamp: currentState.lastAttackAnimation!.timestamp,
+        });
+
+        lastAttackTimestampRef.current = currentState.lastAttackAnimation.timestamp;
+      }
+    }
+
+    // Detect cards drawn for animation
+    const currentPlayerHandSize = currentState.player1.id === playerId ? currentState.player1.hand.length : currentState.player2.hand.length;
+    const currentOpponentHandSize = currentState.player1.id === playerId ? currentState.player2.hand.length : currentState.player1.hand.length;
+
+    const prevPlayerHandSize = prevPlayerHandSizeRef.current;
+    const prevOpponentHandSize = prevOpponentHandSizeRef.current;
+
+    // Check for cards drawn by player
+    if (currentPlayerHandSize > prevPlayerHandSize) {
+      const cardsDrawn = currentPlayerHandSize - prevPlayerHandSize;
+      console.log('🃏 Player drew', cardsDrawn, 'card(s)');
+      setCardsDrawn(cardsDrawn);
+
+      // Clear animation after 2 seconds
+      setTimeout(() => setCardsDrawn(0), 2000);
+    }
+
+    // Check for cards drawn by opponent
+    if (currentOpponentHandSize > prevOpponentHandSize) {
+      const cardsDrawn = currentOpponentHandSize - prevOpponentHandSize;
+      console.log('🃏 Opponent drew', cardsDrawn, 'card(s)');
+      // Note: We don't show opponent's draw animation for fairness
+    }
+
+    // Update previous hand size references
+    prevPlayerHandSizeRef.current = currentPlayerHandSize;
+    prevOpponentHandSizeRef.current = currentOpponentHandSize;
+
+    // Update previous board references
+    prevPlayerBoardRef.current = currentPlayerBoard;
+    prevOpponentBoardRef.current = currentOpponentBoard;
+
     // Always update the state when gameInstance changes
     setGameState(currentState);
-    
+
     if (currentState.activePlayerId === playerId) {
       setTurnTimeRemaining(TURN_TIME_LIMIT);
     }
@@ -370,6 +857,9 @@ export default function GameScreen({
     const card = handCard || boardUnit || opponentUnit;
     if (card) {
       setCardModalDesign(card.design);
+      // If it's a unit on the board, pass the unit data for effect status
+      const unitInPlay = boardUnit || opponentUnit;
+      setCardModalUnit(unitInPlay || null);
       setShowCardModal(true);
     }
   }, [player, opponent]);
@@ -474,6 +964,7 @@ export default function GameScreen({
             selectedAttackerId={selectedAttackerId}
             validAttackTargets={validUnitTargets}
             attackAnimation={attackAnimation}
+            summonedUnits={summonedUnits}
             onSelectUnit={handleSelectUnit}
             onAttackTarget={handleAttackTarget}
             onAttackFace={handleAttackFace}
@@ -481,6 +972,37 @@ export default function GameScreen({
             onUnitLongPress={handleCardLongPress}
             onUnitDoubleTap={handleCardDoubleTap}
           />
+
+          {/* Epic Attack Animation Overlay */}
+          {attackAnimation && attackAnimation.phase !== 'reset' && (() => {
+            const attacker = [...(isPlayer1 ? gameState.player1.board : gameState.player2.board),
+                             ...(isPlayer1 ? gameState.player2.board : gameState.player1.board)]
+              .find(unit => unit.id === attackAnimation.attackerId);
+            const target = [...(isPlayer1 ? gameState.player1.board : gameState.player2.board),
+                           ...(isPlayer1 ? gameState.player2.board : gameState.player1.board)]
+              .find(unit => unit.id === attackAnimation.targetId);
+
+            if (attacker && target) {
+              return (
+                <View style={StyleSheet.absoluteFill}>
+                  <EpicAttackAnimation
+                    attackerUnit={attacker}
+                    targetUnit={target}
+                    damageDealt={attackAnimation.damageDealt}
+                    isLethal={attackAnimation.isLethal}
+                    phase={attackAnimation.phase}
+                    onComplete={() => setAttackAnimation(null)}
+                  />
+                </View>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Card Draw Animation Overlay */}
+          {cardsDrawn > 0 && (
+            <CardDrawAnimation cardCount={cardsDrawn} />
+          )}
         </View>
 
         {/* Central Divider (Glowing Neon Bar) */}
@@ -776,11 +1298,19 @@ export default function GameScreen({
         
         {/* Turn Transition Banner */}
         {showTurnBanner && (
-          <TurnBanner 
+          <TurnBanner
             isYourTurn={turnBannerIsYourTurn}
             onComplete={() => setShowTurnBanner(false)}
           />
         )}
+
+        {/* Card Detail Modal */}
+        <CardDetailModal
+          visible={showCardModal}
+          onClose={() => setShowCardModal(false)}
+          cardDesign={cardModalDesign}
+          unitInPlay={cardModalUnit}
+        />
       </LinearGradient>
 
       {/* Card Details Modal */}
@@ -911,8 +1441,8 @@ const styles = StyleSheet.create({
   },
   deckIcon: {
     position: 'absolute',
-    bottom: 20,
-    left: 20,
+    bottom: 100,
+    left: 150,
     zIndex: 20,
   },
   deckButton: {
@@ -934,8 +1464,8 @@ const styles = StyleSheet.create({
   },
   graveyardIcon: {
     position: 'absolute',
-    bottom: 90,
-    left: 20,
+    bottom: 100,
+    left: 100,
     zIndex: 20,
   },
   opponentGraveyardIcon: {
@@ -946,20 +1476,20 @@ const styles = StyleSheet.create({
   },
   graveyardButton: {
     backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 8,
+    padding: 6,
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#6b7280',
-    minWidth: 50,
+    minWidth: 40,
   },
   graveyardEmoji: {
-    fontSize: 18,
-    marginBottom: 2,
+    fontSize: 14,
+    marginBottom: 1,
   },
   graveyardCount: {
     color: '#94a3b8',
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
   },
   
