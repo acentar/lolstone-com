@@ -683,20 +683,6 @@ export default function ShopScreen() {
               </View>
             </LinearGradient>
           </Pressable>
-          <View style={styles.cryptoPackages}>
-            <View style={styles.packagePreview}>
-              <Text style={styles.packageDucats}>100</Text>
-              <Text style={styles.packageLabel}>$1</Text>
-            </View>
-            <View style={styles.packagePreview}>
-              <Text style={styles.packageDucats}>500</Text>
-              <Text style={styles.packageLabel}>$5</Text>
-            </View>
-            <View style={styles.packagePreview}>
-              <Text style={styles.packageDucats}>1,000</Text>
-              <Text style={styles.packageLabel}>$10</Text>
-            </View>
-          </View>
         </View>
 
           {/* Tips */}
@@ -1212,27 +1198,6 @@ const styles = StyleSheet.create({
     color: '#a78bfa',
     fontSize: 18,
     fontWeight: '700',
-  },
-  cryptoPackages: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  packagePreview: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: 12,
-  },
-  packageDucats: {
-    color: '#f59e0b',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  packageLabel: {
-    color: '#64748b',
-    fontSize: 12,
-    marginTop: 2,
   },
   // Wallet connection styles
   walletConnectedCard: {
