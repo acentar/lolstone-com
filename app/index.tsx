@@ -12,7 +12,9 @@ import { supabase } from '../src/lib/supabase';
 import { useAuthContext } from '../src/context/AuthContext';
 import HeaderNavigation from '../src/components/HeaderNavigation';
 
-const { width, height } = Dimensions.get('window');
+// Use a default width for SSR, actual width will be used at runtime via useWindowDimensions
+const { width: initialWidth = 1200, height } = Dimensions.get('window');
+const width = initialWidth || 1200; // Fallback for static rendering
 
 export default function LandingPage() {
   const router = useRouter();
