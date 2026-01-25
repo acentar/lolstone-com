@@ -148,35 +148,7 @@ export default function ShopScreen() {
   // Animation for the pack
   const packFloat = useState(new Animated.Value(0))[0];
 
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!authLoading && !player) {
-      router.replace('/auth/player');
-    }
-  }, [player, authLoading, router]);
-
-  // Show loading while checking auth
-  if (authLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Don't render if not logged in (will redirect)
-  if (!player) {
-    return null;
-  }
-
-  useEffect(() => {
-    loadAvailableCards();
-    animatePack();
-  }, []);
-
+  // Define functions before useEffect (must be before conditional returns)
   const animatePack = () => {
     Animated.loop(
       Animated.sequence([
@@ -208,6 +180,38 @@ export default function ShopScreen() {
       console.error('Error loading available cards:', error);
     }
   };
+
+  // Load available cards and animate pack - must be before any conditional returns
+  useEffect(() => {
+    if (player) {
+      loadAvailableCards();
+      animatePack();
+    }
+  }, [player]);
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !player) {
+      router.replace('/auth/player');
+    }
+  }, [player, authLoading, router]);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Don't render if not logged in (will redirect)
+  if (!player) {
+    return null;
+  }
 
   const purchaseBooster = async (packType: BoosterPackType) => {
     console.log('=== BOOSTER PURCHASE STARTED ===');
