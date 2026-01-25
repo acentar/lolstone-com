@@ -314,6 +314,11 @@ export async function createSolTransferTransaction(
 
 /**
  * Create a Meme Coin transfer transaction
+ * 
+ * Note: For SPL tokens, transfers go to the Associated Token Account (ATA), not directly to the wallet.
+ * The ATA address (e.g., DnXTuYaNaGyq4N37Xr2PHGjhv8eiWFtrS4RGzH8pFfkg) is derived from the 
+ * receiver wallet (BStVdWMMpN7vZG1hs1wvNDACmNkSZzLehrx3Tb61zm7G) and token mint.
+ * This is correct behavior - the ATA is owned by the receiver wallet.
  */
 export async function createMemeCoinTransferTransaction(
   senderPublicKey: any,
@@ -329,9 +334,24 @@ export async function createMemeCoinTransferTransaction(
   const mint = await getMemeCoinMint();
   const receiver = await getReceiverWallet();
 
+  // Verify we're using the correct receiver wallet
+  if (receiver.toBase58() !== RECEIVER_WALLET_ADDRESS) {
+    console.error('❌ ERROR: Receiver wallet mismatch!');
+    console.error('  Expected:', RECEIVER_WALLET_ADDRESS);
+    console.error('  Got:', receiver.toBase58());
+    throw new Error('Receiver wallet configuration error');
+  }
+
   // Get associated token addresses
+  // For SPL tokens, we must transfer to the ATA, not the wallet directly
   const senderATA = await getAssociatedTokenAddress(mint, senderPublicKey);
   const receiverATA = await getAssociatedTokenAddress(mint, receiver);
+
+  // Debug: Log addresses for verification
+  console.log('🔍 LOLS Transfer:');
+  console.log('  Receiver Wallet:', receiver.toBase58());
+  console.log('  Receiver ATA (destination):', receiverATA.toBase58());
+  console.log('  Amount:', amount.toString());
 
   // Create transfer instruction
   const transferInstruction = createTransferInstruction(
