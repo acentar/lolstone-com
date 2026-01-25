@@ -434,6 +434,41 @@ export default function BrandingPage() {
           </View>
         </View>
 
+        {/* Banner */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Banner</Text>
+          <Text style={styles.sectionDescription}>
+            1024x1024px square banner for promotional use.
+          </Text>
+          
+          <View style={styles.bannerShowcase}>
+            <View style={styles.bannerItem}>
+              <View style={styles.bannerContainer}>
+                <LinearGradient
+                  colors={['#0a0a0f', '#1e293b']}
+                  style={styles.bannerGradient}
+                >
+                  <View style={styles.bannerLogoContainer}>
+                    <View style={styles.bannerLogoTopContainer}>
+                      <Text style={styles.bannerLogoTop}>L</Text>
+                      <View style={styles.bannerFunnyO}>
+                        <View style={styles.bannerFunnyOInner}>
+                          <View style={styles.bannerFunnyOLeftEye} />
+                          <View style={styles.bannerFunnyORightEye} />
+                          <View style={styles.bannerFunnyOMouth} />
+                        </View>
+                      </View>
+                      <Text style={styles.bannerLogoTop}>L</Text>
+                    </View>
+                    <Text style={styles.bannerLogoBottom}>STONE</Text>
+                  </View>
+                </LinearGradient>
+              </View>
+              <Text style={styles.bannerSizeLabel}>1024x1024px</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Spacing */}
         <View style={styles.spacer} />
       </ScrollView>
@@ -963,6 +998,115 @@ const styles = StyleSheet.create({
   colorCode: {
     fontSize: 14,
     color: colors.textSecondary,
+  },
+  bannerShowcase: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+  },
+  bannerItem: {
+    alignItems: 'center',
+  },
+  bannerContainer: {
+    marginBottom: spacing.sm,
+    width: 1024,
+    height: 1024,
+    maxWidth: '100%',
+    maxHeight: '80vh',
+    aspectRatio: 1,
+    overflow: 'hidden',
+    alignSelf: 'center',
+  },
+  bannerGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerLogoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerLogoTopContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 32,
+  },
+  bannerLogoTop: {
+    fontSize: 256,
+    fontWeight: '900',
+    letterSpacing: 32,
+    color: '#00f5d4',
+    lineHeight: 280,
+    textShadowColor: 'rgba(0, 245, 212, 0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 40,
+  },
+  bannerLogoBottom: {
+    fontSize: 192,
+    fontWeight: '900',
+    letterSpacing: 24,
+    color: '#ffffff',
+    lineHeight: 200,
+    marginTop: -40,
+    transform: [{ rotate: '-5deg' }],
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 16,
+  },
+  bannerFunnyO: {
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    borderWidth: 24,
+    borderColor: '#00f5d4',
+    backgroundColor: 'rgba(0, 245, 212, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginHorizontal: 16,
+  },
+  bannerFunnyOInner: {
+    width: 240,
+    height: 240,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  bannerFunnyOLeftEye: {
+    position: 'absolute',
+    top: 64,
+    left: 64,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#00f5d4',
+  },
+  bannerFunnyORightEye: {
+    position: 'absolute',
+    top: 64,
+    right: 64,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#00f5d4',
+  },
+  bannerFunnyOMouth: {
+    position: 'absolute',
+    bottom: 64,
+    width: 128,
+    height: 80,
+    borderBottomWidth: 24,
+    borderBottomColor: '#00f5d4',
+    borderBottomLeftRadius: 64,
+    borderBottomRightRadius: 64,
+  },
+  bannerSizeLabel: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    fontWeight: '600',
   },
   spacer: {
     height: spacing.xxl,
