@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -59,6 +60,9 @@ export default function CryptoPayment({
 }: CryptoPaymentProps) {
   // Use wallet context for Phantom connection
   const { connected, publicKey, connecting, connect, disconnect, signAndSendTransaction, connection } = useWalletContext();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 900;
+  const isTablet = width >= 600 && width < 900;
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
@@ -479,7 +483,11 @@ export default function CryptoPayment({
       onRequestClose={handleClose}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={[
+          styles.modalContent,
+          isDesktop && styles.modalContentDesktop,
+          isTablet && styles.modalContentTablet,
+        ]}>
           {/* Close Button */}
           <Pressable style={styles.closeButton} onPress={handleClose}>
             <Text style={styles.closeButtonText}>✕</Text>
@@ -549,6 +557,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2d2d44',
   },
+  modalContentTablet: {
+    maxWidth: 720,
+  },
+  modalContentDesktop: {
+    maxWidth: 900,
+  },
   scrollContent: {
     paddingTop: 8,
   },
@@ -609,6 +623,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: 'transparent',
+  },
+  packageCardTablet: {
+    width: '30%',
+    minWidth: 160,
+  },
+  packageCardDesktop: {
+    width: '30%',
+    minWidth: 180,
   },
   packageSelected: {
     borderColor: '#8b5cf6',
