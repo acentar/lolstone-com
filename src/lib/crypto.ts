@@ -37,9 +37,13 @@ export const RECEIVER_WALLET_ADDRESS = 'BStVdWMMpN7vZG1hs1wvNDACmNkSZzLehrx3Tb61
 // USDC Mint on Solana Mainnet
 export const USDC_MINT_ADDRESS = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
+// Meme Coin Mint Address
+export const MEME_COIN_MINT_ADDRESS = 'BDD5XKXLSC6fSAFmTVpVWFTdfSSG7a2LTYxBXt6rpump';
+
 // Lazy-loaded PublicKey instances
 let RECEIVER_WALLET: any = null;
 let USDC_MINT: any = null;
+let MEME_COIN_MINT: any = null;
 
 const getReceiverWallet = async () => {
   await loadSolanaLibs();
@@ -55,11 +59,23 @@ const getUsdcMint = async () => {
   return USDC_MINT;
 };
 
+const getMemeCoinMint = async () => {
+  if (!MEME_COIN_MINT) {
+    await loadSolanaLibs();
+    MEME_COIN_MINT = new PublicKey(MEME_COIN_MINT_ADDRESS);
+  }
+  return MEME_COIN_MINT;
+};
+
 // USDC decimals (6)
 export const USDC_DECIMALS = 6;
 
 // SOL decimals (9)
 export const SOL_DECIMALS = 9;
+
+// Meme Coin decimals (typically 6 for most SPL tokens, but may vary)
+// Most meme coins use 6 decimals, adjust if needed
+export const MEME_COIN_DECIMALS = 6;
 
 // Ducat rate: 1 ducat = 0.10 USD (100 ducats = $10)
 export const DUCAT_USD_RATE = 0.10;
@@ -93,6 +109,29 @@ export async function getSolPriceUsd(): Promise<number> {
     // Fallback to a default price if API fails
     return 150; // Reasonable fallback
   }
+}
+
+/**
+ * Get Meme Coin price in USD
+ * For now, we'll use a default price or fetch from an API
+ * You can update this to fetch from Jupiter, Birdeye, or another price API
+ */
+export async function getMemeCoinPriceUsd(): Promise<number> {
+  try {
+    // Try to fetch from Jupiter API (common for Solana tokens)
+    const res = await fetch(`https://price.jup.ag/v4/price?ids=${MEME_COIN_MINT_ADDRESS}`);
+    const data = await res.json();
+    if (data.data && data.data[MEME_COIN_MINT_ADDRESS]) {
+      return data.data[MEME_COIN_MINT_ADDRESS].price;
+    }
+  } catch (error) {
+    console.error('Error fetching meme coin price:', error);
+  }
+  
+  // Fallback: You may want to set a default price here
+  // For now, returning a placeholder - you should set the actual price
+  console.warn('Using default meme coin price. Update getMemeCoinPriceUsd() with actual price fetching.');
+  return 0.0001; // Placeholder - UPDATE THIS with actual price
 }
 
 /**
@@ -132,6 +171,37 @@ export function formatUsdcAmount(lamports: number): string {
 export function formatSolAmount(lamports: number): string {
   const sol = lamports / Math.pow(10, SOL_DECIMALS);
   return sol.toFixed(4);
+}
+
+/**
+ * Calculate Meme Coin amount needed for ducats
+ * @param ducats - Number of ducats to purchase
+ * @param memeCoinPriceUsd - Current meme coin price in USD
+ * @returns Amount in meme coin tokens (with decimals as integer)
+ */
+export function calculateMemeCoinAmount(ducats: number, memeCoinPriceUsd: number): number {
+  if (memeCoinPriceUsd <= 0) {
+    throw new Error('Invalid meme coin price');
+  }
+  const usd = ducats * DUCAT_USD_RATE;
+  const tokenAmount = usd / memeCoinPriceUsd;
+  const tokenWithBuffer = tokenAmount * (1 + SOL_PRICE_BUFFER); // Add 5% buffer for volatility
+  return Math.ceil(tokenWithBuffer * Math.pow(10, MEME_COIN_DECIMALS)); // Convert to smallest unit
+}
+
+/**
+ * Format Meme Coin amount for display
+ */
+export function formatMemeCoinAmount(tokens: number): string {
+  const amount = tokens / Math.pow(10, MEME_COIN_DECIMALS);
+  // Format with appropriate decimal places based on amount
+  if (amount >= 1000) {
+    return amount.toFixed(0);
+  } else if (amount >= 1) {
+    return amount.toFixed(2);
+  } else {
+    return amount.toFixed(6);
+  }
 }
 
 /**
@@ -222,6 +292,56 @@ export async function createSolTransferTransaction(
     toPubkey: receiver,
     lamports: lamports,
   });
+
+  // Create transaction
+  const transaction = new Transaction().add(transferInstruction);
+
+  // Set fee payer
+  transaction.feePayer = senderPublicKey;
+
+  // Get latest blockhash if connection is available
+  if (connection) {
+    try {
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+    } catch (error) {
+      console.warn('Failed to get blockhash, Phantom will add it:', error);
+    }
+  }
+
+  return transaction;
+}
+
+/**
+ * Create a Meme Coin transfer transaction
+ */
+export async function createMemeCoinTransferTransaction(
+  senderPublicKey: any,
+  ducats: number,
+  memeCoinPriceUsd: number,
+  connection: any
+): Promise<any> {
+  await loadSolanaLibs();
+
+  const amount = calculateMemeCoinAmount(ducats, memeCoinPriceUsd);
+
+  // Get the mint and receiver wallet
+  const mint = await getMemeCoinMint();
+  const receiver = await getReceiverWallet();
+
+  // Get associated token addresses
+  const senderATA = await getAssociatedTokenAddress(mint, senderPublicKey);
+  const receiverATA = await getAssociatedTokenAddress(mint, receiver);
+
+  // Create transfer instruction
+  const transferInstruction = createTransferInstruction(
+    senderATA,
+    receiverATA,
+    senderPublicKey,
+    amount,
+    [],
+    TOKEN_PROGRAM_ID
+  );
 
   // Create transaction
   const transaction = new Transaction().add(transferInstruction);

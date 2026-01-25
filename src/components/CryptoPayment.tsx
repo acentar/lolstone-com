@@ -33,8 +33,12 @@ import {
   getSolPriceUsd,
   calculateSolAmount,
   formatSolAmount,
+  getMemeCoinPriceUsd,
+  calculateMemeCoinAmount,
+  formatMemeCoinAmount,
   createUsdcTransferTransaction,
   createSolTransferTransaction,
+  createMemeCoinTransferTransaction,
   verifyTransaction,
 } from '../lib/crypto';
 
@@ -58,7 +62,8 @@ export default function CryptoPayment({
   const [selectedPackage, setSelectedPackage] = useState<typeof DUCAT_PACKAGES[0] | null>(null);
   const [paymentState, setPaymentState] = useState<PaymentState>('select');
   const [solPrice, setSolPrice] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'usdc' | 'sol'>('usdc');
+  const [memeCoinPrice, setMemeCoinPrice] = useState<number | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'usdc' | 'sol' | 'meme'>('usdc');
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
@@ -97,10 +102,14 @@ export default function CryptoPayment({
     opacity: glowOpacity.value,
   }));
 
-  // Fetch SOL price on mount
+  // Fetch prices on mount
   useEffect(() => {
     if (visible) {
       getSolPriceUsd().then(setSolPrice);
+      getMemeCoinPriceUsd().then(setMemeCoinPrice).catch(err => {
+        console.error('Failed to fetch meme coin price:', err);
+        setMemeCoinPrice(null);
+      });
     }
   }, [visible]);
 
@@ -190,6 +199,22 @@ export default function CryptoPayment({
           selectedPackage.ducats,
           solPrice,
           connection // May be null if RPC failed, Phantom will handle
+        );
+      } else if (paymentMethod === 'meme') {
+        // Create Meme Coin transfer transaction
+        if (!memeCoinPrice) {
+          throw new Error('Meme coin price not available. Please try again.');
+        }
+        console.log('Creating Meme Coin transfer transaction...');
+        console.log('Sender:', publicKey.toString ? publicKey.toString() : publicKey);
+        console.log('Amount (ducats):', selectedPackage.ducats);
+        console.log('Meme coin price:', memeCoinPrice);
+        
+        transaction = await createMemeCoinTransferTransaction(
+          publicKey,
+          selectedPackage.ducats,
+          memeCoinPrice,
+          connection
         );
       } else {
         // Create USDC transfer transaction
@@ -350,6 +375,16 @@ export default function CryptoPayment({
               <Text style={styles.methodLabel}>SOL</Text>
               <Text style={styles.methodAmount}>
                 {solPrice ? formatSolAmount(calculateSolAmount(selectedPackage.ducats, solPrice)) : '...'} SOL
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.methodOption, paymentMethod === 'meme' && styles.methodSelected]}
+              onPress={() => setPaymentMethod('meme')}
+            >
+              <Text style={styles.methodIcon}>🪙</Text>
+              <Text style={styles.methodLabel}>Meme</Text>
+              <Text style={styles.methodAmount}>
+                {memeCoinPrice ? formatMemeCoinAmount(calculateMemeCoinAmount(selectedPackage.ducats, memeCoinPrice)) : '...'}
               </Text>
             </Pressable>
           </View>
@@ -620,6 +655,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     justifyContent: 'center',
+    flexWrap: 'wrap',
   },
   methodOption: {
     flex: 1,

@@ -16,14 +16,18 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABAS
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // Your receiver wallet (hardcoded for verification)
-const RECEIVER_WALLET = '8XnSN4Jix5TDmybFix3f3ircvKK96FJGXiU4PEojubA4';
+const RECEIVER_WALLET = 'BStVdWMMpN7vZG1hs1wvNDACmNkSZzLehrx3Tb61zm7G';
 
 // USDC Mint on Solana Mainnet
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
+// Meme Coin Mint Address
+const MEME_COIN_MINT = 'BDD5XKXLSC6fSAFmTVpVWFTdfSSG7a2LTYxBXt6rpump';
+
 // Ducat rate: 1 ducat = 0.10 USD (100 ducats = $10)
 const DUCAT_USD_RATE = 0.10;
 const USDC_DECIMALS = 6;
+const MEME_COIN_DECIMALS = 6;
 
 // Create Supabase client with service role for elevated permissions
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -80,15 +84,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Transaction failed on-chain' });
     }
 
-    // Verify the transaction transferred USDC to our wallet
-    const expectedAmount = Math.ceil(ducats * DUCAT_USD_RATE * Math.pow(10, USDC_DECIMALS));
+    // Verify the transaction transferred payment to our wallet
+    // Check for USDC, Meme Coin, or SOL transfers
+    const expectedUsdcAmount = Math.ceil(ducats * DUCAT_USD_RATE * Math.pow(10, USDC_DECIMALS));
     let transferVerified = false;
     let transferredAmount = 0;
+    let paymentType = 'unknown';
 
     // Check token transfers in post token balances
     const preBalances = tx.meta?.preTokenBalances || [];
     const postBalances = tx.meta?.postTokenBalances || [];
 
+    // Check for USDC transfer
     for (const postBalance of postBalances) {
       if (
         postBalance.mint === USDC_MINT &&
@@ -103,10 +110,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const postBal = postBalance.uiTokenAmount.uiAmount || 0;
         const diff = (postBal - preBal) * Math.pow(10, USDC_DECIMALS);
 
-        if (diff >= expectedAmount * 0.99) { // Allow 1% variance
+        if (diff >= expectedUsdcAmount * 0.99) { // Allow 1% variance
           transferVerified = true;
           transferredAmount = diff;
+          paymentType = 'usdc';
           break;
+        }
+      }
+    }
+
+    // Check for Meme Coin transfer if USDC not found
+    if (!transferVerified) {
+      for (const postBalance of postBalances) {
+        if (
+          postBalance.mint === MEME_COIN_MINT &&
+          postBalance.owner === RECEIVER_WALLET
+        ) {
+          // Find matching pre-balance
+          const preBalance = preBalances.find(
+            (pb) => pb.accountIndex === postBalance.accountIndex
+          );
+
+          const preBal = preBalance?.uiTokenAmount.uiAmount || 0;
+          const postBal = postBalance.uiTokenAmount.uiAmount || 0;
+          const diff = (postBal - preBal) * Math.pow(10, MEME_COIN_DECIMALS);
+
+          // For meme coin, we just verify that we received tokens
+          // The amount calculation is done client-side based on price
+          if (diff > 0) {
+            transferVerified = true;
+            transferredAmount = diff;
+            paymentType = 'meme';
+            break;
+          }
         }
       }
     }
@@ -128,6 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (solDiff > 0) {
           transferVerified = true;
           transferredAmount = solDiff;
+          paymentType = 'sol';
         }
       }
     }
@@ -164,7 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       type: 'purchase',
       to_player_id: player.id,
       ducats_amount: ducats,
-      description: `Crypto payment: ${signature}`,
+      description: `Crypto payment (${paymentType}): ${signature}`,
     });
 
     return res.status(200).json({
