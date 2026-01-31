@@ -22,6 +22,46 @@
     {
       "source": "/player/deck/:id",
       "destination": "/player/deck/[id].html"
+    },
+    {
+      "source": "/gmp",
+      "destination": "/gmp/index.html"
+    },
+    {
+      "source": "/gmp/",
+      "destination": "/gmp/index.html"
+    },
+    {
+      "source": "/gmp/login",
+      "destination": "/gmp/login.html"
+    },
+    {
+      "source": "/gmp/mint",
+      "destination": "/gmp/mint.html"
+    },
+    {
+      "source": "/gmp/players",
+      "destination": "/gmp/players.html"
+    },
+    {
+      "source": "/gmp/economy",
+      "destination": "/gmp/economy.html"
+    },
+    {
+      "source": "/gmp/cards",
+      "destination": "/gmp/cards/index.html"
+    },
+    {
+      "source": "/gmp/cards/new",
+      "destination": "/gmp/cards/new.html"
+    },
+    {
+      "source": "/gmp/cards/edit",
+      "destination": "/gmp/cards/edit.html"
+    },
+    {
+      "source": "/auth/player",
+      "destination": "/auth/player.html"
     }
   ]
 }

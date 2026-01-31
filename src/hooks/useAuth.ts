@@ -80,52 +80,59 @@ export function useAuth() {
     setState(prev => ({ ...prev, loading: true }));
     console.log('🔍 checkUserRole started for:', user.id);
 
-    // Marko's exact GM record from database
-    if (user.id === 'e5a761e9-3267-4dc0-9d8d-8d83fcb35cb5') {
-      console.log('✅ Marko detected - loading GM account');
-      setState({
-        session,
-        user,
-        isGameMaster: true,
-        gameMaster: {
-          id: '83a296df-f513-4400-8d23-c226232284f4',
-          user_id: 'e5a761e9-3267-4dc0-9d8d-8d83fcb35cb5',
-          name: 'Marko',
-          email: 'supermassivestarcollision@gmail.com',
-          created_at: '2025-12-30T14:45:11.013116+00:00',
-          updated_at: '2025-12-30T14:45:11.013116+00:00',
-        },
-        player: null,
-        loading: false,
-      });
-      return;
-    }
-
-    // For unknown users, check player table
-    console.log('🔍 Checking player status...');
     try {
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
+      // Check game_masters first (RLS allows user to read own row)
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Query timeout after 10s')), 10000)
       );
-      
-      const queryPromise = supabase
+
+      const gmQueryPromise = supabase
+        .from('game_masters')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const { data: gmData, error: gmError } = await Promise.race([
+        gmQueryPromise,
+        timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))
+      ]) as { data: GameMaster | null; error: { message: string } | null };
+
+      if (gmError) {
+        console.warn('🔍 GM query error (will check player):', gmError.message);
+      }
+
+      if (gmData) {
+        console.log('✅ Game Master found:', gmData.email);
+        setState({
+          session,
+          user,
+          isGameMaster: true,
+          gameMaster: gmData,
+          player: null,
+          loading: false,
+        });
+        return;
+      }
+
+      // Not a GM — check player table
+      console.log('🔍 Checking player status...');
+      const playerQueryPromise = supabase
         .from('players')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
-      
+
       const { data: playerData, error: queryError } = await Promise.race([
-        queryPromise,
+        playerQueryPromise,
         timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))
       ]) as any;
-      
+
       if (queryError) {
         console.error('❌ Player query error:', queryError);
       }
-      
+
       console.log('🔍 Player result:', playerData);
-      
+
       setState({
         session,
         user,
