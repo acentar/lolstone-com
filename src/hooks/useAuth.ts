@@ -82,20 +82,26 @@ export function useAuth() {
 
     try {
       // Check game_masters first (RLS allows user to read own row)
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Query timeout after 10s')), 10000)
+      const timeoutMs = 15000;
+      const timeoutResult = { data: null as GameMaster | null, error: { message: 'Timeout' } };
+      const timeoutPromise = new Promise<typeof timeoutResult>((resolve) =>
+        setTimeout(() => resolve(timeoutResult), timeoutMs)
       );
 
       const gmQueryPromise = supabase
         .from('game_masters')
         .select('*')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .maybeSingle()
+        .then(({ data, error }) => ({ data, error: error ? { message: error.message } : null }));
 
-      const { data: gmData, error: gmError } = await Promise.race([
+      const gmResult = await Promise.race([
         gmQueryPromise,
-        timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))
-      ]) as { data: GameMaster | null; error: { message: string } | null };
+        timeoutPromise,
+      ]);
+
+      const gmData = gmResult.data ?? null;
+      const gmError = gmResult.error ?? null;
 
       if (gmError) {
         console.warn('🔍 GM query error (will check player):', gmError.message);
@@ -116,6 +122,9 @@ export function useAuth() {
 
       // Not a GM — check player table
       console.log('🔍 Checking player status...');
+      const playerTimeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), timeoutMs)
+      );
       const playerQueryPromise = supabase
         .from('players')
         .select('*')
@@ -124,7 +133,7 @@ export function useAuth() {
 
       const { data: playerData, error: queryError } = await Promise.race([
         playerQueryPromise,
-        timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))
+        playerTimeoutPromise.then((r) => ({ data: r.data, error: r.error }))
       ]) as any;
 
       if (queryError) {

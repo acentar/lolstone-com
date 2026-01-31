@@ -47,6 +47,17 @@ export default function GMPLayout() {
   // Allow login page to render without auth check
   const isLoginPage = pathname === '/gmp/login';
 
+  // If we're stuck on loading for too long (e.g. Supabase slow), send user to login so they can retry
+  const showingLoading = !isLoginPage && (loading || !user || !isGameMaster);
+  useEffect(() => {
+    if (!showingLoading) return;
+    const t = setTimeout(() => {
+      console.log('GMP Layout: Loading took too long, redirecting to login');
+      router.replace('/gmp/login');
+    }, 15000);
+    return () => clearTimeout(t);
+  }, [showingLoading, router]);
+
   // Redirect to login if not authenticated
   useEffect(() => {
     console.log('GMP Layout: pathname:', pathname, 'loading:', loading, 'user:', !!user, 'isGM:', isGameMaster);
