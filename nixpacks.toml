@@ -3,7 +3,7 @@
 # - Use npm install (avoids npm ci lock file sync issues)
 [phases.setup]
 nixPkgs = ["...", "python3"]
-aptPkgs = ["...", "build-essential"]
+aptPkgs = ["...", "build-essential", "libudev-dev"]
 
 [phases.install]
 cmds = ["export PYTHON=$(which python3 || which python); npm install"]
