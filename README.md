@@ -192,6 +192,56 @@ expo build:ios
 expo build:android
 ```
 
+## 🗄️ Database setup (Supabase)
+
+If **nothing works** (can’t create users, login, or see data), the Supabase project the app uses may have no schema or wrong RLS.
+
+### 1. Check what’s in the database
+
+1. Open your Supabase project (e.g. [Dashboard](https://supabase.com/dashboard) → your project).
+2. Go to **SQL Editor** and run the diagnostic script:
+   - Open `supabase/check_database.sql` in this repo.
+   - Paste its contents into the SQL Editor and run it.
+
+You’ll see:
+- Whether required tables exist (`game_masters`, `players`, `card_designs`, `card_instances`, `decks`, etc.).
+- Whether RLS is enabled on those tables.
+- Whether policies exist for `players` (e.g. SELECT for username check, INSERT for registration) and `card_designs` (e.g. public SELECT for homepage).
+- Whether the `is_game_master` function exists.
+
+### 2. If tables or policies are missing
+
+Apply the schema and migrations **in this project’s Supabase project** (the one whose URL is in your app’s `EXPO_PUBLIC_SUPABASE_URL`):
+
+1. **Run the base schema**
+   - In SQL Editor, run the contents of `supabase/schema.sql` (creates tables, RLS, policies, `is_game_master`).
+
+2. **Run migrations in order**
+   - Run each file in `supabase/migrations/` in numeric order: `001_...`, `002_...`, … up to `020_...`.
+   - If a migration fails (e.g. “policy already exists”), you can adjust or skip that part and continue.
+
+3. **Create at least one Game Master** (for GMP access)
+   - Sign up once via the app (or create a user in Supabase Auth).
+   - In SQL Editor, insert that user as a GM (replace with your user UUID and email):
+   ```sql
+   INSERT INTO game_masters (user_id, name, email)
+   VALUES ('your-auth-user-uuid', 'Your Name', 'your@email.com');
+   ```
+
+### 3. Auth: “Confirm email” can block login
+
+- In Supabase: **Authentication → Providers → Email**.
+- If **“Confirm email”** is enabled, new signups must confirm before they can sign in.
+- For development you can turn **“Confirm email”** off so login works right after signup.
+- For production, keep it on and use Supabase’s email templates or a custom SMTP so users receive the link.
+
+### 4. App must use the same Supabase project
+
+- The app uses whatever URL and anon key are in **build-time** env:
+  - Local: `.env` with `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+  - Production (e.g. Coolify/Vercel): set the same two variables in the platform’s environment and redeploy.
+- If the app points at a **different** project (e.g. old or empty), you’ll see no data and auth will be for that other project. Fix by setting the correct URL/key and redeploying.
+
 ## 🐛 Troubleshooting
 
 ### Environment Variables Not Working in Production
