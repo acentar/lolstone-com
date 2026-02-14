@@ -1,4 +1,8 @@
-# Coolify/Nixpacks: use npm install so install works when lock file has peer/optional mismatches.
-# npm ci fails with "Missing: @react-native-async-storage/async-storage@1.24.0 from lock file".
+# Coolify/Nixpacks: Node.js app with native deps (e.g. usb for wallet adapters).
+# - Add Python so node-gyp can build native modules (usb)
+# - Use npm install (avoids npm ci lock file sync issues)
+[phases.setup]
+nixPkgs = ["...", "python3"]
+
 [phases.install]
-cmds = ["npm install"]
+cmds = ["export PYTHON=$(which python3 || which python); npm install"]

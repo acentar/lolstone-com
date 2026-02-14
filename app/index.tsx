@@ -29,6 +29,7 @@ export default function LandingPage() {
   // Recently minted cards state
   const [recentlyMintedCards, setRecentlyMintedCards] = useState<CardDesignFull[]>([]);
   const [loadingCards, setLoadingCards] = useState(true);
+  const [cardsError, setCardsError] = useState<string | null>(null);
 
   const [selectedCard, setSelectedCard] = useState<CardDesign | null>(null);
   const [cardModalVisible, setCardModalVisible] = useState(false);
@@ -68,6 +69,7 @@ export default function LandingPage() {
   const fetchRecentlyMintedCards = async () => {
     try {
       setLoadingCards(true);
+      setCardsError(null);
       console.log('🔄 Fetching recently minted cards...');
 
       // Get all card designs that have been minted (total_minted > 0)
@@ -109,10 +111,12 @@ export default function LandingPage() {
 
       if (designsError) {
         console.error('❌ Error fetching minted card designs:', designsError);
+        setCardsError(designsError.message || 'Failed to load cards');
         setRecentlyMintedCards([]);
         return;
       }
 
+      setCardsError(null);
       console.log('📊 Found minted card designs:', designsData?.length || 0);
 
       if (!designsData || designsData.length === 0) {
@@ -138,6 +142,7 @@ export default function LandingPage() {
 
     } catch (error) {
       console.error('❌ Error in fetchRecentlyMintedCards:', error);
+      setCardsError(error instanceof Error ? error.message : 'Failed to load cards');
       setRecentlyMintedCards([]);
     } finally {
       setLoadingCards(false);
@@ -306,10 +311,19 @@ export default function LandingPage() {
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading recent cards...</Text>
           </View>
+        ) : cardsError ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>Couldn&apos;t load cards</Text>
+            <Text style={styles.emptyText}>{cardsError}</Text>
+            <Text style={styles.emptyText}>Check that EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set in .env</Text>
+            <Pressable style={styles.retryButton} onPress={() => fetchRecentlyMintedCards()}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
         ) : recentlyMintedCards.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>No Cards Available</Text>
-            <Text style={styles.emptyText}>Cards will appear here once they're created and minted!</Text>
+            <Text style={styles.emptyText}>Cards will appear here once they&apos;re created and minted!</Text>
           </View>
         ) : (
           <>
@@ -944,6 +958,18 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 
   // Game Info Section

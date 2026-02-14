@@ -16,8 +16,8 @@ export default function RootLayout() {
     console.log('🚀 RootLayout mounted');
     console.log('📍 Current URL:', typeof window !== 'undefined' ? window.location.href : 'SSR');
     console.log('🔧 Environment check:', {
-      hasSupabaseUrl: !!process.env.EXPO_PUBLIC_SUPABASE_URL,
-      hasSupabaseKey: !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      hasSupabaseUrl: !!(process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
+      hasSupabaseKey: !!(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     });
   }, []);
 
