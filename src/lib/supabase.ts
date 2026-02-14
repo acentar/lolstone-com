@@ -8,6 +8,13 @@ import { Database } from '../types/database';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+// Placeholders so build (e.g. Coolify/Docker) can complete when env is not yet set. Replace with real vars and redeploy.
+const PLACEHOLDER_URL = 'https://placeholder.supabase.co';
+const PLACEHOLDER_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIn0.placeholder';
+const url = supabaseUrl || PLACEHOLDER_URL;
+const key = supabaseAnonKey || PLACEHOLDER_KEY;
+const hasRealConfig = !!(supabaseUrl && supabaseAnonKey);
+
 // Log configuration status (helpful for debugging production issues)
 console.log('🔧 Supabase Config:', {
   hasUrl: !!supabaseUrl,
@@ -16,26 +23,11 @@ console.log('🔧 Supabase Config:', {
   keyPreview: supabaseAnonKey ? supabaseAnonKey.substring(0, 10) + '...' : 'MISSING',
 });
 
-// Validate environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
-  const missingVars: string[] = [];
-  if (!supabaseUrl) missingVars.push('EXPO_PUBLIC_SUPABASE_URL');
-  if (!supabaseAnonKey) missingVars.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-  
-  console.error('❌ Missing required environment variables:', missingVars.join(', '));
-  console.error('');
-  console.error('💡 FOR VERCEL DEPLOYMENT:');
-  console.error('   1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables');
-  console.error('   2. Add these variables:');
-  console.error('      - EXPO_PUBLIC_SUPABASE_URL = https://taovuehsewbomdptruln.supabase.co');
-  console.error('      - EXPO_PUBLIC_SUPABASE_ANON_KEY = your_anon_key');
-  console.error('   3. Make sure "Production", "Preview", and "Development" are ALL checked');
-  console.error('   4. IMPORTANT: You must REDEPLOY after adding variables!');
-  console.error('      - Go to Deployments tab');
-  console.error('      - Click "..." on latest deployment → "Redeploy"');
-  console.error('');
-  console.error('⚠️ Environment variables are baked in at BUILD TIME, not runtime.');
-  console.error('   Simply adding them does NOT fix existing deployments!');
+if (!hasRealConfig) {
+  console.error('❌ Missing required environment variables: EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  console.error('💡 COOLIFY: Add them as Build Environment Variables, then redeploy.');
+  console.error('💡 VERCEL: Add them in Project → Settings → Environment Variables, then redeploy.');
+  console.error('⚠️  Variables are baked in at BUILD TIME. Redeploy after adding them.');
 }
 
 // Check if we're in a browser environment (not SSR/Node)
@@ -97,7 +89,7 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(url, key, {
   auth: {
     storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,

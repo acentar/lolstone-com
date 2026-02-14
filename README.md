@@ -186,6 +186,16 @@ Access via `/gmp/login` with admin credentials:
 
 **Note**: The `.env` file is only for local development. Vercel uses its own environment variables configured in the dashboard.
 
+### Coolify (Docker / Nixpacks)
+
+The web build runs `expo export --platform web`, which bakes env vars into the bundle at **build time**. In Coolify:
+
+1. Open your application → **Environment Variables**.
+2. Add **Build** (or “available during build”) variables:
+   - `EXPO_PUBLIC_SUPABASE_URL` = your Supabase project URL  
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` = your Supabase anon key  
+3. Save and **Redeploy**. The build will then embed these values; without them the app will use placeholders and not connect to Supabase.
+
 ### Mobile Deployment
 ```bash
 expo build:ios
